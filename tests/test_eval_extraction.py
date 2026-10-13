@@ -98,12 +98,24 @@ def test_run_eval_extraction_end_to_end_with_tiny_fixture_set(
     fixtures_dir.mkdir()
     (fixtures_dir / "a.json").write_text(
         json.dumps(
-            {"id": "a", "title": "Engineer", "company": "Acme", "text": "text a"}
+            {
+                "id": "a",
+                "title": "Engineer",
+                "company": "Acme",
+                "location": "Remote",
+                "text": "text a",
+            }
         )
     )
     (fixtures_dir / "b.json").write_text(
         json.dumps(
-            {"id": "b", "title": "Designer", "company": "Acme", "text": "text b"}
+            {
+                "id": "b",
+                "title": "Designer",
+                "company": "Acme",
+                "location": "Remote",
+                "text": "text b",
+            }
         )
     )
     labels_file = tmp_path / "labels.yaml"

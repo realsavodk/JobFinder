@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 
 from job_scout.llm.base import ExtractionError, LLMProvider
 from job_scout.llm.provider import extract_with_retry
-from job_scout.llm.text import hash_text, strip_html, truncate_for_context
+from job_scout.llm.text import extraction_text, hash_text, truncate_for_context
 from job_scout.models import Posting
 
 MAX_EXTRACTIONS_PER_RUN = 50
@@ -25,7 +25,9 @@ async def extract_company_postings(
         if attempted >= MAX_EXTRACTIONS_PER_RUN:
             break
 
-        stripped = strip_html(posting.description_html)
+        stripped = extraction_text(
+            posting.title, posting.location, posting.description_html
+        )
         content_hash = hash_text(stripped)
         already_done = (
             posting.extraction_hash == content_hash

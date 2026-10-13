@@ -32,5 +32,7 @@ def truncate_for_context(text: str, *, num_ctx: int) -> str:
     return text[:budget_chars]
 
 
-def prepare_posting_text(description_html: str, *, num_ctx: int) -> str:
-    return truncate_for_context(strip_html(description_html), num_ctx=num_ctx)
+def extraction_text(title: str, location: str, description_html: str) -> str:
+    # Title and location usually live outside the description body, and the
+    # model can't extract location/remote/seniority it never sees.
+    return f"Title: {title}\nLocation: {location}\n\n{strip_html(description_html)}"

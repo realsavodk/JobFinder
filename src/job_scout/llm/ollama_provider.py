@@ -18,9 +18,14 @@ class OllamaProvider(LLMProvider):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.num_ctx = num_ctx
-        self._client = client or httpx.AsyncClient()
+        # No httpx timeout: extract_with_retry's EXTRACTION_TIMEOUT_SECONDS governs,
+        # and httpx's 5s default aborts model loads.
+        self._client = client or httpx.AsyncClient(timeout=None)
 
     async def extract(self, posting_text: str) -> PostingExtraction:
+        schema = PostingExtraction.model_json_schema()
+        # Fields with defaults aren't "required", so Ollama's grammar lets the model skip them.
+        schema["required"] = list(schema["properties"])
         payload = {
             "model": self.model,
             "messages": [
@@ -28,7 +33,8 @@ class OllamaProvider(LLMProvider):
                 {"role": "user", "content": posting_text},
             ],
             "stream": False,
-            "format": PostingExtraction.model_json_schema(),
+            "think": False,  # qwen3 thinks by default: ~3x slower, and format already constrains output
+            "format": schema,
             "options": {"temperature": 0, "num_ctx": self.num_ctx},
         }
         try:

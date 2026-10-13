@@ -1,6 +1,6 @@
 from job_scout.llm.text import (
+    extraction_text,
     hash_text,
-    prepare_posting_text,
     strip_html,
     truncate_for_context,
 )
@@ -30,11 +30,9 @@ def test_truncate_for_context_respects_char_budget():
     assert len(truncated) == 300
 
 
-def test_prepare_posting_text_strips_then_truncates():
-    html = "<p>" + ("word " * 1000) + "</p>"
-    result = prepare_posting_text(html, num_ctx=100)
-    assert "<p>" not in result
-    assert len(result) <= 300
+def test_extraction_text_prepends_title_and_location_to_stripped_body():
+    result = extraction_text("Backend Engineer", "Seattle", "<p>Build <b>APIs</b></p>")
+    assert result == "Title: Backend Engineer\nLocation: Seattle\n\nBuild APIs"
 
 
 def test_hash_is_stable_for_identical_text():

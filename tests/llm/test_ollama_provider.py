@@ -42,7 +42,11 @@ def test_extract_sends_schema_format_and_temperature_zero():
     assert captured["body"]["model"] == "qwen2.5:7b"
     assert captured["body"]["options"]["temperature"] == 0
     assert captured["body"]["options"]["num_ctx"] == 8192
-    assert captured["body"]["format"] == PostingExtraction.model_json_schema()
+    sent_format = captured["body"]["format"]
+    assert (
+        sent_format["properties"] == PostingExtraction.model_json_schema()["properties"]
+    )
+    assert set(sent_format["required"]) == set(sent_format["properties"])
     assert result.seniority == "senior"
     assert result.min_years == 5
     assert result.required_skills == ["Python"]

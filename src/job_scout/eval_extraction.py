@@ -9,7 +9,7 @@ from job_scout.config import load_llm_config
 from job_scout.llm.base import ExtractionError
 from job_scout.llm.extraction import PostingExtraction
 from job_scout.llm.provider import extract_with_retry, get_provider
-from job_scout.llm.text import prepare_posting_text
+from job_scout.llm.text import extraction_text, truncate_for_context
 
 _SCALAR_FIELDS = ("seniority", "min_years", "location", "remote", "role_family")
 _LIST_FIELDS = ("required_skills", "nice_skills", "degree_fields")
@@ -90,7 +90,10 @@ async def run_eval_extraction(fixtures_dir: Path, labels_file: Path) -> None:
             if expected is None:
                 continue
 
-            text = prepare_posting_text(fixture["text"], num_ctx=llm_config.num_ctx)
+            text = truncate_for_context(
+                extraction_text(fixture["title"], fixture["location"], fixture["text"]),
+                num_ctx=llm_config.num_ctx,
+            )
             try:
                 predicted = await extract_with_retry(provider, text)
             except ExtractionError as exc:

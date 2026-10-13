@@ -8,7 +8,7 @@ from job_scout.llm.extraction import PostingExtraction
 from job_scout.llm.ollama_provider import OllamaProvider
 from job_scout.llm.openai_compatible_provider import OpenAICompatibleProvider
 
-EXTRACTION_TIMEOUT_SECONDS = 60
+EXTRACTION_TIMEOUT_SECONDS = 120
 
 
 def get_provider(llm_config: LLMConfig) -> LLMProvider:
