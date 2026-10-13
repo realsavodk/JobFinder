@@ -1,0 +1,210 @@
+# Hand-labeled expected PostingExtraction fields for the eval-extraction fixtures
+# in evals/postings/*.json. Labeled by Claude in one pass, reading the real
+# (stripped) posting text and grounding each value in an explicit statement in
+# the text wherever possible (e.g. "10+ years of experience...", "#LI-Onsite",
+# "Bachelor's degree in X"). Left as null where the posting genuinely doesn't
+# state a value — don't guess just to fill a field, including when correcting
+# or extending this file.
+#
+# This is a best-effort first pass, not received ground truth — review and
+# correct before trusting the accuracy numbers eval-extraction reports.
+
+"0001": # Abuse Investigator, Stripe
+  seniority: senior
+  min_years: 10
+  required_skills: [Python, SQL]
+  nice_skills: [Databricks, Trino, PySpark, Pandas, Scikit-learn]
+  degree_fields: [Computer Science]
+  location: Seattle, San Francisco, New York City
+  remote: onsite
+  role_family: trust_and_safety
+
+"0004": # Abuse Research Engineer, Stripe
+  seniority: senior
+  min_years: 5
+  required_skills: [threat intelligence, data analytics]
+  nice_skills: [Databricks, Trino, PySpark, Pandas, Scikit-learn, MITRE ATT&CK]
+  degree_fields: [Computer Science, Cybersecurity]
+  location: Remote from the US
+  remote: remote
+  role_family: security
+
+"0005": # Account Executive, AI Sales, Stripe
+  seniority: senior
+  min_years: 8
+  required_skills: [enterprise sales, technical sales]
+  nice_skills: []
+  degree_fields: []
+  location: San Francisco, CA
+  remote: onsite
+  role_family: sales
+
+"0132": # Cloud Security Engineer, Stripe
+  seniority: null # no explicit level stated; text says "regardless of level or experience"
+  min_years: null
+  required_skills: [software engineering]
+  nice_skills: [Linux, Kubernetes, cloud security, threat modeling]
+  degree_fields: []
+  location: Seattle
+  remote: onsite
+  role_family: security
+
+"0168": # Data Analyst, Intern, Stripe
+  seniority: intern
+  min_years: 0
+  required_skills: [SQL]
+  nice_skills: [AI tools, data pipelines]
+  degree_fields: [Data Analytics, Statistics, Economics, Mathematics]
+  location: New York, Seattle, South San Francisco HQ
+  remote: onsite
+  role_family: data
+
+"0187": # Editorial Director, Brand & Creative Partnerships, Stripe
+  seniority: senior
+  min_years: 8
+  required_skills: [editorial, writing]
+  nice_skills: [brand marketing, media partnerships]
+  degree_fields: []
+  location: "US: SF, NYC, Seattle and Remote"
+  remote: hybrid
+  role_family: marketing
+
+"0201": # Engineering Manager, Machine Learning - Fraud Detection, Stripe
+  seniority: senior
+  min_years: 3
+  required_skills: [engineering management, machine learning]
+  nice_skills: []
+  degree_fields: []
+  location: null # raw posting location field is "N/A"
+  remote: null
+  role_family: engineering
+
+"0313": # Internal Audit Data Analytics Lead, Stripe
+  seniority: senior
+  min_years: 5
+  required_skills: [SQL, ETL]
+  nice_skills: [Python, R, machine learning, Airflow]
+  degree_fields: [Statistics, Computer Science, Economics]
+  location: Toronto, New York, San Francisco, Atlanta, Seattle
+  remote: onsite
+  role_family: data
+
+"0537": # Senior Mechanical and Industrial Design Engineer, Stripe
+  seniority: senior
+  min_years: 8
+  required_skills: [mechanical design, industrial design]
+  nice_skills: [KeyShot, VRED, Blender]
+  degree_fields: [Mechanical Engineering, Industrial Design]
+  location: Taipei, Taiwan
+  remote: onsite
+  role_family: hardware
+
+"0538": # Senior Product Manager, Enterprise, Stripe
+  seniority: senior
+  min_years: 12
+  required_skills: [product management]
+  nice_skills: []
+  degree_fields: []
+  location: San Francisco, Seattle, New York, Chicago, Atlanta, Remote
+  remote: hybrid
+  role_family: product
+
+"0723": # Android Engineer - Experience, Spotify
+  seniority: null
+  min_years: null
+  required_skills: [Android]
+  nice_skills: [mobile development, data]
+  degree_fields: []
+  location: London
+  remote: onsite
+  role_family: engineering
+
+"0724": # Art Director - Mexico, Spotify
+  seniority: null
+  min_years: null
+  required_skills: []
+  nice_skills: [brand design, creative direction]
+  degree_fields: []
+  location: Mexico City
+  remote: onsite
+  role_family: design
+
+"0727": # Associate - Audiobook Licensing & Author Partnerships, Spotify
+  seniority: associate
+  min_years: null
+  required_skills: []
+  nice_skills: [licensing, partnerships]
+  degree_fields: []
+  location: New York, NY
+  remote: onsite
+  role_family: business_development
+
+"0729": # Backend Engineer - Data Platform, Spotify
+  seniority: null
+  min_years: null
+  required_skills: [backend engineering]
+  nice_skills: [BigQuery, Apache Iceberg]
+  degree_fields: []
+  location: Stockholm
+  remote: onsite
+  role_family: engineering
+
+"0732": # Business Development Senior Manager, APAC, Spotify
+  seniority: senior
+  min_years: null
+  required_skills: [business development, partnerships]
+  nice_skills: []
+  degree_fields: []
+  location: Singapore
+  remote: onsite
+  role_family: business_development
+
+"0806": # Software Engineer, Developer Platform, Notion
+  seniority: senior
+  min_years: 7
+  required_skills: [TypeScript]
+  nice_skills: [AI tools]
+  degree_fields: []
+  location: San Francisco, California
+  remote: onsite
+  role_family: engineering
+
+"0807": # Business Development Representative, New York, Notion
+  seniority: entry
+  min_years: null
+  required_skills: [outbound sales, cold prospecting]
+  nice_skills: []
+  degree_fields: []
+  location: New York, New York
+  remote: onsite
+  role_family: sales
+
+"0809": # Product Designer, Notion
+  seniority: senior
+  min_years: 5
+  required_skills: [product design, UX]
+  nice_skills: []
+  degree_fields: []
+  location: San Francisco, California
+  remote: onsite
+  role_family: design
+
+"0814": # Engineering Manager, Mobile AI, Notion
+  seniority: senior
+  min_years: 2
+  required_skills: [engineering management]
+  nice_skills: [mobile, AI]
+  degree_fields: []
+  location: New York, New York
+  remote: onsite
+  role_family: engineering
+
+"0815": # Software Engineer, Infrastructure, Notion
+  seniority: mid
+  min_years: 4
+  required_skills: [distributed systems]
+  nice_skills: []
+  degree_fields: []
+  location: Hyderabad, India
+  remote: onsite
+  role_family: engineering

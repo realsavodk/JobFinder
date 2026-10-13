@@ -1,0 +1,21 @@
+<tr class="status-{{ posting.status }}" id="posting-{{ posting.id }}">
+  <td><a href="{{ posting.url }}" target="_blank" rel="noopener">{{ posting.title }}</a></td>
+  <td>{{ posting.company }}</td>
+  <td>{{ posting.location }}</td>
+  <td class="score">{{ posting.score if posting.score is not none else "-" }}</td>
+  <td class="reasons">{{ reasons | join(", ") }}</td>
+  <td>{{ posting.posted_at.strftime("%Y-%m-%d") if posting.posted_at else "-" }}</td>
+  <td>
+    <form hx-post="/postings/{{ posting.id }}" hx-trigger="change" hx-target="#posting-{{ posting.id }}" hx-swap="outerHTML">
+      <select name="status">
+        {% for choice in ["new", "interested", "applied", "rejected", "hidden", "closed"] %}
+        <option value="{{ choice }}" {% if posting.status == choice %}selected{% endif %}>{{ choice }}</option>
+        {% endfor %}
+      </select>
+      <br />
+      <textarea name="notes" placeholder="notes">{{ posting.notes or "" }}</textarea>
+      <br />
+      <input type="date" name="follow_up_date" value="{{ posting.follow_up_date or "" }}" />
+    </form>
+  </td>
+</tr>

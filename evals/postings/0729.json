@@ -1,0 +1,7 @@
+{
+  "id": "0729",
+  "title": "Backend Engineer - Data Platform",
+  "company": "Spotify",
+  "location": "Stockholm",
+  "text": "LilEngine is leading the Lakehouse, a company-strategic effort to make Apache Iceberg a first-class citizen in Spotify's data ecosystem. We're building it in close collaboration with Google, on open standards, so that different kinds of data are queryable the same way and teams can bring the right engine, from BigQuery to Dataflow to Trino, to the job. The work has two parts. Hecate enables Iceberg for the Parquet datasets that already exist across Spotify, so teams get the benefits without rewriting their data. Alongside it, we're building the foundations of a new Lakehouse architecture that lets workflows write Iceberg tables natively. We're shipping the MVP this cycle, and you'll help shape what comes next. We also own BigQuery for all of Spotify. Thousands of engineers, data scientists and pipelines depend on it every day, which puts us on the critical path for storing, finding and querying data. We're judged on reliability, cost efficiency and how quickly we unblock users when something breaks. This backend role sits where open table formats, cloud data warehouses and processing engines meet."
+}

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# real local config/secrets — ship the .example versions only
+.env
+companies.yaml
+profile.yaml
+
+# local dev database
+*.db

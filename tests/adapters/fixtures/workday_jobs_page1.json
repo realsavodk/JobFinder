@@ -1,0 +1,27 @@
+{
+  "total": 0,
+  "jobPostings": [
+    {
+      "title": "Senior Product Manager \u2013 Developer Platform Telemetry & Observability",
+      "externalPath": "/job/USA-CA-Pleasanton/Senior-Product-Manager---Developer-Platform-Core-Services_JR-0109909",
+      "locationsText": "USA, CA, Pleasanton",
+      "postedOn": "Posted Yesterday",
+      "remoteType": "Flex",
+      "bulletFields": [
+        "JR-0109909"
+      ]
+    },
+    {
+      "title": "Renewal Manager, Adaptive Planning",
+      "externalPath": "/job/Costa-Rica/Renewal-Manager--Adaptive-Planning_JR-0110609",
+      "locationsText": "Costa Rica",
+      "postedOn": "Posted Yesterday",
+      "remoteType": "Flex",
+      "bulletFields": [
+        "JR-0110609"
+      ]
+    }
+  ],
+  "facets": [],
+  "userAuthenticated": false
+}

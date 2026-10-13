@@ -1,0 +1,5 @@
+# Greenhouse/Lever/Ashby: {name, ats, token}
+# Workday: {name, ats: workday, tenant, host (e.g. wd3), site, searchText (optional)}
+- name: Stripe
+  ats: greenhouse
+  token: stripe

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h2>Run status</h2>
+<table>
+  <tr><th>Company</th><th>Last run</th><th>OK</th><th>Message</th></tr>
+  {% for run in run_statuses %}
+  <tr>
+    <td>{{ run.company }}</td>
+    <td>{{ run.last_run_at.strftime("%Y-%m-%d %H:%M") if run.last_run_at else "never" }}</td>
+    <td>{{ "yes" if run.ok else "no" }}</td>
+    <td>{{ run.message }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Postings</h2>
+<form class="filters" method="get" action="/">
+  <label>Min score <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100" /></label>
+  <label>Company
+    <select name="company">
+      <option value="">All</option>
+      {% for c in companies %}
+      <option value="{{ c }}" {% if filters.company == c %}selected{% endif %}>{{ c }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label><input type="checkbox" name="remote_only" value="true" {% if filters.remote_only %}checked{% endif %} /> Remote only</label>
+  <label><input type="checkbox" name="new_only" value="true" {% if filters.new_only %}checked{% endif %} /> New since last visit</label>
+  <button type="submit">Apply filters</button>
+</form>
+
+<table>
+  <tr><th>Title</th><th>Company</th><th>Location</th><th>Score</th><th>Reasons</th><th>Posted</th><th>Status / Notes</th></tr>
+  {% for posting in postings %}
+    {% set reasons = reasons_by_id[posting.id] %}
+    {% include "_posting_row.html" %}
+  {% endfor %}
+</table>
+{% if not postings %}<p>No postings match these filters.</p>{% endif %}
+
+{% endblock %}

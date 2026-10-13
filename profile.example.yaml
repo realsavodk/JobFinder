@@ -1,0 +1,30 @@
+majors:
+  - Computer Science
+
+skills:
+  - name: Python
+    weight: 5
+  - name: SQL
+    weight: 3
+  - name: React
+    weight: 2
+
+tools:
+  - Git
+  - Docker
+
+years_experience: 3
+
+seniority_targets:
+  - mid
+  - senior
+
+locations:
+  - Remote
+  - New York, NY
+
+remote_ok: true
+
+exclude_keywords:
+  - unpaid
+  - commission only
