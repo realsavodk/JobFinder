@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 
+{% if resume_error %}<p class="error">{{ resume_error }}</p>{% endif %}
+{% if resume_lines %}
+<h2>Resume imported</h2>
+<pre>{{ resume_lines | join("\n") }}</pre>
+{% endif %}
+
 <h2>companies.yaml</h2>
 <pre>{{ companies_text }}</pre>
 

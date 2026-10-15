@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from sqlmodel import Session, select
 
 from job_scout.llm.base import ExtractionError, LLMProvider
@@ -11,7 +13,12 @@ MAX_EXTRACTIONS_PER_RUN = 50
 
 
 async def extract_company_postings(
-    session: Session, *, company: str, provider: LLMProvider, num_ctx: int
+    session: Session,
+    *,
+    company: str,
+    provider: LLMProvider,
+    num_ctx: int,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> int:
     postings = session.exec(
         select(Posting).where(
@@ -19,12 +26,11 @@ async def extract_company_postings(
         )
     ).all()
 
-    attempted = 0
-    failed = 0
+    # Pick the work up front so progress can report a real total.
+    todo = []
     for posting in postings:
-        if attempted >= MAX_EXTRACTIONS_PER_RUN:
+        if len(todo) >= MAX_EXTRACTIONS_PER_RUN:
             break
-
         stripped = extraction_text(
             posting.title, posting.location, posting.description_html
         )
@@ -33,9 +39,14 @@ async def extract_company_postings(
             posting.extraction_hash == content_hash
             and posting.extraction_status != "pending"
         )
-        if already_done:
-            continue
+        if not already_done:
+            todo.append((posting, stripped, content_hash))
 
+    attempted = 0
+    failed = 0
+    for posting, stripped, content_hash in todo:
+        if on_progress:
+            on_progress(attempted, len(todo))
         attempted += 1
         text = truncate_for_context(stripped, num_ctx=num_ctx)
         try:

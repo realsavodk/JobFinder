@@ -141,3 +141,25 @@ def test_years_requirement_within_plus_one_tolerance_is_not_filtered():
     result = score_posting(posting, _profile(years_experience=2))
 
     assert result.score > 0
+
+
+def test_keyword_skills_match_whole_words_only():
+    posting = _posting(
+        title="Frontend Engineer",
+        location="Remote",
+        description_html="<p>Shape our JavaScript and C++ codebase.</p>",
+    )
+    profile = _profile(
+        skills=[
+            SkillWeight(name="C", weight=1),
+            SkillWeight(name="Java", weight=1),
+            SkillWeight(name="SHAP", weight=1),
+            SkillWeight(name="JavaScript", weight=1),
+            SkillWeight(name="C++", weight=1),
+        ],
+        tools=[],
+        majors=[],
+    )
+    result = score_posting(posting, profile)
+
+    assert result.reasons == ["JavaScript", "C++"]

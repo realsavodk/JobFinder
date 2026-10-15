@@ -11,8 +11,9 @@ does not state — never guess.
 
 - seniority: one of "intern", "entry", "associate", "mid", "senior", "staff",
   "principal", "manager", "director", "executive" — no other values ("Lead" in
-  a title means "senior"). Take it from the title or an explicit level; years of
-  experience alone don't set it.
+  a title means "senior"; "Junior", "New Grad", "Graduate" or "Early Career"
+  means "entry"; "Intern", "Internship" or "Co-op" means "intern"). Take it from
+  the title or an explicit level; years of experience alone don't set it.
 - min_years: the smallest number of years of experience required, as an integer.
 - required_skills / nice_skills: short names of concrete tools, languages,
   technologies or domains, 1-3 words each (e.g. "Python", "SQL", "Kubernetes",

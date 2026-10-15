@@ -32,6 +32,22 @@ ADAPTERS = {
 
 
 @dataclass
+class RunProgress:
+    running: bool = False
+    stage: str = ""
+    done: int = 0
+    total: int = 0
+
+
+# Read by the dashboard's progress bar; one run at a time per process.
+progress = RunProgress()
+
+
+def _report(stage: str, done: int, total: int) -> None:
+    progress.stage, progress.done, progress.total = stage, done, total
+
+
+@dataclass
 class RunResult:
     company: str
     ok: bool
@@ -112,6 +128,8 @@ async def run_all(companies_file: Path, profile_file: Path) -> list[RunResult]:
     profile = load_profile(profile_file)
     llm_config = load_llm_config()
     provider = get_provider(llm_config)
+    progress.running = True
+    _report("Starting", 0, 0)
 
     try:
         extraction_ok, reason = await provider.check_available()
@@ -126,7 +144,8 @@ async def run_all(companies_file: Path, profile_file: Path) -> list[RunResult]:
         touched_companies: list[str] = []
         async with httpx.AsyncClient(timeout=30) as client:
             with Session(engine) as session:
-                for company in companies:
+                for i, company in enumerate(companies):
+                    _report(f"Fetching jobs from {company.name}", i, len(companies))
                     results.append(
                         await _run_company(client, session, company, run_started_at)
                     )
@@ -140,16 +159,23 @@ async def run_all(companies_file: Path, profile_file: Path) -> list[RunResult]:
                 for name in touched_companies:
                     dedup_postings(session, company=name)
 
-                for name in touched_companies:
+                for i, name in enumerate(touched_companies):
+                    label = f"{name} ({i + 1} of {len(touched_companies)} companies)"
                     if extraction_ok:
                         await extract_company_postings(
                             session,
                             company=name,
                             provider=provider,
                             num_ctx=llm_config.num_ctx,
+                            on_progress=lambda done, total, label=label: _report(
+                                f"Reading postings with the LLM: {label}", done, total
+                            ),
                         )
+                    _report(f"Scoring {label}", 0, 0)
                     score_postings_for_company(session, company=name, profile=profile)
 
         return results
     finally:
+        progress.running = False
+        _report("Done", 0, 0)
         await provider.aclose()

@@ -187,3 +187,24 @@ def test_max_extractions_per_run_cap(tmp_path, monkeypatch):
 
     assert attempted == 2
     assert provider.calls == 2
+
+
+def test_on_progress_reports_done_out_of_postings_needing_extraction(tmp_path):
+    engine = _engine(tmp_path)
+    with Session(engine) as session:
+        session.add(_posting("1"))
+        session.add(_posting("2"))
+        session.commit()
+
+        calls = []
+        asyncio.run(
+            extract_company_postings(
+                session,
+                company="Acme",
+                provider=_FakeProvider(PostingExtraction(seniority="mid")),
+                num_ctx=8192,
+                on_progress=lambda done, total: calls.append((done, total)),
+            )
+        )
+
+    assert calls == [(0, 2), (1, 2)]

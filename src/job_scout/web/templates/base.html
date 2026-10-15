@@ -18,6 +18,12 @@
     tr.status-rejected { opacity: 0.5; }
     input[type="text"], textarea, select, input[type="date"] { font-size: 0.9em; }
     textarea { width: 14rem; height: 2.5rem; }
+    label.button { font: inherit; font-size: 0.83em; padding: 1px 6px; border: 1px solid #767676; border-radius: 3px; background: #efefef; cursor: pointer; }
+    label.button:focus-within { outline: 2px solid #2563eb; }
+    .error { color: #b91c1c; }
+    .progress { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; padding: 0.5rem 0.75rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; }
+    .progress progress { flex: 1; min-width: 10rem; }
+    .progress.done { background: #f0fdf4; border-color: #bbf7d0; }
   </style>
 </head>
 <body>
@@ -27,7 +33,15 @@
     <form method="post" action="/run" style="display:inline">
       <button type="submit">Run now</button>
     </form>
+    <form method="post" action="/resume" enctype="multipart/form-data" style="display:inline">
+      <label class="button">
+        Upload resume
+        <input type="file" name="resume" accept=".pdf,.txt,.md" hidden
+               onchange="this.form.querySelector('label').firstChild.textContent = 'Parsing resume… '; this.form.submit()" />
+      </label>
+    </form>
   </nav>
+  <div hx-get="/progress" hx-trigger="load" hx-swap="outerHTML"></div>
   <h1>Job Scout</h1>
   {% block content %}{% endblock %}
 </body>

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import httpx
+from pydantic import BaseModel
 
 from job_scout.llm.base import ExtractionError, LLMProvider
 from job_scout.llm.extraction import EXTRACTION_SYSTEM_PROMPT, PostingExtraction
+from job_scout.llm.resume import RESUME_SYSTEM_PROMPT, ResumeExtraction
 
 
 class OllamaProvider(LLMProvider):
@@ -23,14 +25,26 @@ class OllamaProvider(LLMProvider):
         self._client = client or httpx.AsyncClient(timeout=None)
 
     async def extract(self, posting_text: str) -> PostingExtraction:
-        schema = PostingExtraction.model_json_schema()
+        return await self._chat_json(
+            EXTRACTION_SYSTEM_PROMPT, posting_text, PostingExtraction
+        )
+
+    async def extract_resume(self, resume_text: str) -> ResumeExtraction:
+        return await self._chat_json(
+            RESUME_SYSTEM_PROMPT, resume_text, ResumeExtraction
+        )
+
+    async def _chat_json[M: BaseModel](
+        self, system_prompt: str, text: str, model_cls: type[M]
+    ) -> M:
+        schema = model_cls.model_json_schema()
         # Fields with defaults aren't "required", so Ollama's grammar lets the model skip them.
         schema["required"] = list(schema["properties"])
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
-                {"role": "user", "content": posting_text},
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
             ],
             "stream": False,
             "think": False,  # qwen3 thinks by default: ~3x slower, and format already constrains output
@@ -43,7 +57,7 @@ class OllamaProvider(LLMProvider):
             )
             response.raise_for_status()
             content = response.json()["message"]["content"]
-            return PostingExtraction.model_validate_json(content)
+            return model_cls.model_validate_json(content)
         except (httpx.HTTPError, KeyError, ValueError) as exc:
             raise ExtractionError(str(exc)) from exc
 

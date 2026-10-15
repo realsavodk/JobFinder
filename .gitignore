@@ -8,6 +8,7 @@ __pycache__/
 .env
 companies.yaml
 profile.yaml
+profile.yaml.bak
 
 # local dev database
 *.db

@@ -1,23 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, SQLModel, create_engine, select
 
 from job_scout.config import database_url
 from job_scout.models import CompanyRunStatus, Posting
+from job_scout.pipeline import run as pipeline_run
 from job_scout.pipeline.run import RunResult, run_all
+from job_scout.resume_import import ResumeImportError, import_resume
 from job_scout.scheduler import start_scheduler
 
 COMPANIES_FILE = Path("companies.yaml")
 PROFILE_FILE = Path("profile.yaml")
+RESUME_SUFFIXES = {".pdf", ".txt", ".md"}
+MAX_RESUME_BYTES = 5 * 1024 * 1024
 
 _run_task: asyncio.Task[list[RunResult]] | None = None
 
@@ -129,8 +135,9 @@ async def run_now() -> RedirectResponse:
     return RedirectResponse(url="/", status_code=303)
 
 
-@app.get("/config", response_class=HTMLResponse)
-def config(request: Request) -> HTMLResponse:
+def _render_config(
+    request: Request, resume_lines: list[str] | None = None, resume_error: str = ""
+) -> HTMLResponse:
     companies_text = (
         COMPANIES_FILE.read_text() if COMPANIES_FILE.exists() else "(missing)"
     )
@@ -138,5 +145,50 @@ def config(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "config.html",
-        {"companies_text": companies_text, "profile_text": profile_text},
+        {
+            "companies_text": companies_text,
+            "profile_text": profile_text,
+            "resume_lines": resume_lines,
+            "resume_error": resume_error,
+        },
+        status_code=400 if resume_error else 200,
     )
+
+
+@app.get("/progress", response_class=HTMLResponse)
+def run_progress(request: Request, polling: bool = False) -> HTMLResponse:
+    # polling=True means the bar was already showing a run, so "not running" now
+    # means it just finished; a fresh page load with no run shows nothing.
+    return templates.TemplateResponse(
+        request,
+        "_progress.html",
+        {"progress": pipeline_run.progress, "polling": polling},
+    )
+
+
+@app.get("/config", response_class=HTMLResponse)
+def config(request: Request) -> HTMLResponse:
+    return _render_config(request)
+
+
+@app.post("/resume", response_class=HTMLResponse)
+async def upload_resume(
+    request: Request, resume: Annotated[UploadFile, File()]
+) -> HTMLResponse:
+    suffix = Path(resume.filename or "").suffix.lower()
+    if suffix not in RESUME_SUFFIXES:
+        return _render_config(request, resume_error="Upload a .pdf, .txt or .md file.")
+    content = await resume.read(MAX_RESUME_BYTES + 1)
+    if len(content) > MAX_RESUME_BYTES:
+        return _render_config(request, resume_error="Resume is larger than 5 MB.")
+
+    with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
+        tmp.write(content)
+        tmp.flush()
+        try:
+            lines = await import_resume(Path(tmp.name), PROFILE_FILE)
+        except (ResumeImportError, UnicodeDecodeError) as exc:
+            return _render_config(
+                request, resume_error=f"Couldn't import resume: {exc}"
+            )
+    return _render_config(request, resume_lines=lines)

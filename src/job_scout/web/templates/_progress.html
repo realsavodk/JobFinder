@@ -1,0 +1,18 @@
+{% if progress.running %}
+<div id="progress" class="progress" role="status" aria-live="polite"
+     hx-get="/progress?polling=true" hx-trigger="every 2s" hx-swap="outerHTML">
+  <span>{{ progress.stage }}{% if progress.total %} — {{ progress.done }} / {{ progress.total }}{% endif %}</span>
+  {% if progress.total %}
+  <progress value="{{ progress.done }}" max="{{ progress.total }}"></progress>
+  {% else %}
+  <progress></progress>
+  {% endif %}
+</div>
+{% elif polling %}
+<div id="progress" class="progress done" role="status" aria-live="polite">
+  <span>Done — refresh to see the new results.</span>
+  <button type="button" onclick="location.reload()">Refresh</button>
+</div>
+{% else %}
+<div id="progress"></div>
+{% endif %}

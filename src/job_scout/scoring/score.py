@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from job_scout.llm.text import strip_html
@@ -21,6 +22,12 @@ class ScoreResult:
 def _posting_text(posting: Posting) -> str:
     description = strip_html(posting.description_html)
     return f"{posting.title} {posting.location} {description}".lower()
+
+
+def _mentions(text: str, term: str) -> bool:
+    # Whole-word match: plain substring matching made "C" hit every posting,
+    # "Java" hit "JavaScript" and "SHAP" hit "shape".
+    return re.search(rf"(?<!\w){re.escape(term.lower())}(?![\w+#])", text) is not None
 
 
 def _location_matches(posting: Posting, profile: Profile) -> bool:
@@ -60,19 +67,19 @@ def _keyword_score(posting: Posting, profile: Profile) -> ScoreResult:
 
     for skill in profile.skills:
         max_weight += skill.weight
-        if skill.name.lower() in text:
+        if _mentions(text, skill.name):
             matched_weight += skill.weight
             reasons.append(skill.name)
 
     for tool in profile.tools:
         max_weight += TOOL_WEIGHT
-        if tool.lower() in text:
+        if _mentions(text, tool):
             matched_weight += TOOL_WEIGHT
             reasons.append(tool)
 
     for major in profile.majors:
         max_weight += MAJOR_WEIGHT
-        if major.lower() in text:
+        if _mentions(text, major):
             matched_weight += MAJOR_WEIGHT
             reasons.append(major)
 

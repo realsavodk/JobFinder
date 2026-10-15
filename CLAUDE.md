@@ -35,6 +35,7 @@ Personalized job board. Pulls postings from company career pages (via public ATS
 - `.env`: `LLM_PROVIDER` (`ollama` default, or `openai_compatible`), `LLM_MODEL`, `LLM_NUM_CTX` (default `8192`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), `LLM_API_KEY` + `LLM_BASE_URL` (only used by the `openai_compatible` provider), `DATABASE_URL`
 - `companies.yaml`: target companies. Greenhouse/Lever/Ashby: `{name, ats, token}`. Workday: `{name, ats: workday, tenant, host (e.g. wd3), site, searchText (optional, per company)}`
 - `profile.yaml`: user profile — majors, skills (with weight), tools, years of experience, seniority targets, locations, remote OK, exclude keywords
+  - `job-scout import-resume <resume.pdf|.txt|.md>` (or the dashboard's "Upload resume" button, `POST /resume`) fills skills + `years_experience` from a resume via the LLM provider (`llm/resume.py`, `resume_import.py`). Years are computed in code from role dates (overlaps merged, internships excluded), not by the model. Existing skills/weights and other fields are kept; new skills get weight 1; the previous file is saved as `profile.yaml.bak`. PDFs need `pdftotext` (poppler).
 
 Ship `.env.example`, `companies.example.yaml`, `profile.example.yaml`. Never commit real keys.
 
