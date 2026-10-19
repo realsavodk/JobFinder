@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from job_scout.llm.text import strip_html
 from job_scout.models import Posting
+from job_scout.regions import regions_in
 from job_scout.scoring.profile import Profile
 from job_scout.scoring.seniority import estimate_min_years
 
@@ -30,9 +31,18 @@ def _mentions(text: str, term: str) -> bool:
     return re.search(rf"(?<!\w){re.escape(term.lower())}(?![\w+#])", text) is not None
 
 
+def _same_region(location: str, profile: Profile) -> bool:
+    # Province-level on purpose: "Ontario" or "Toronto" in the profile matches any
+    # Ontario posting; users can skip ones that are too far.
+    wanted = set().union(*(regions_in(loc) for loc in profile.locations))
+    return bool(wanted & regions_in(location))
+
+
 def _location_matches(posting: Posting, profile: Profile) -> bool:
     location = posting.location.lower()
     if any(loc.lower() in location for loc in profile.locations):
+        return True
+    if _same_region(posting.location, profile):
         return True
     return profile.remote_ok and "remote" in location
 
@@ -40,10 +50,10 @@ def _location_matches(posting: Posting, profile: Profile) -> bool:
 def score_posting(posting: Posting, profile: Profile) -> ScoreResult:
     if posting.extraction_status == "success":
         return _structured_score(posting, profile)
-    return _keyword_score(posting, profile)
+    return keyword_score(posting, profile)
 
 
-def _keyword_score(posting: Posting, profile: Profile) -> ScoreResult:
+def keyword_score(posting: Posting, profile: Profile) -> ScoreResult:
     text = _posting_text(posting)
 
     for keyword in profile.exclude_keywords:
@@ -93,8 +103,10 @@ def _structured_location_matches(posting: Posting, profile: Profile) -> bool:
     if not extracted_location and not remote:
         # extraction didn't give us a usable location signal; fall back to the raw field
         return _location_matches(posting, profile)
-    return any(loc.lower() in extracted_location for loc in profile.locations) or (
-        profile.remote_ok and remote in ("remote", "hybrid")
+    return (
+        any(loc.lower() in extracted_location for loc in profile.locations)
+        or _same_region(posting.extracted_location or "", profile)
+        or (profile.remote_ok and remote in ("remote", "hybrid"))
     )
 
 

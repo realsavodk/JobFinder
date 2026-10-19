@@ -19,7 +19,7 @@ from job_scout.llm.provider import get_provider
 from job_scout.models import CompanyRunStatus
 from job_scout.pipeline.dedup import dedup_postings
 from job_scout.pipeline.expire import expire_postings
-from job_scout.pipeline.extract import extract_company_postings
+from job_scout.pipeline.extract import extract_postings
 from job_scout.pipeline.score import score_postings_for_company
 from job_scout.pipeline.upsert import existing_external_ids, upsert_postings
 from job_scout.scoring.profile import load_profile
@@ -159,19 +159,21 @@ async def run_all(companies_file: Path, profile_file: Path) -> list[RunResult]:
                 for name in touched_companies:
                     dedup_postings(session, company=name)
 
+                if extraction_ok:
+                    await extract_postings(
+                        session,
+                        companies=touched_companies,
+                        profile=profile,
+                        provider=provider,
+                        num_ctx=llm_config.num_ctx,
+                        on_progress=lambda done, total: _report(
+                            "Reading the best-matching postings with the LLM",
+                            done,
+                            total,
+                        ),
+                    )
                 for i, name in enumerate(touched_companies):
-                    label = f"{name} ({i + 1} of {len(touched_companies)} companies)"
-                    if extraction_ok:
-                        await extract_company_postings(
-                            session,
-                            company=name,
-                            provider=provider,
-                            num_ctx=llm_config.num_ctx,
-                            on_progress=lambda done, total, label=label: _report(
-                                f"Reading postings with the LLM: {label}", done, total
-                            ),
-                        )
-                    _report(f"Scoring {label}", 0, 0)
+                    _report(f"Scoring {name}", i, len(touched_companies))
                     score_postings_for_company(session, company=name, profile=profile)
 
         return results

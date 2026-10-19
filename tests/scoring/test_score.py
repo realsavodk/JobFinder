@@ -163,3 +163,30 @@ def test_keyword_skills_match_whole_words_only():
     result = score_posting(posting, profile)
 
     assert result.reasons == ["JavaScript", "C++"]
+
+
+def test_profile_province_matches_city_only_posting_location():
+    profile = _profile(locations=["Ontario"], remote_ok=False)
+    toronto = _posting(
+        title="Backend Engineer", location="Toronto", description_html="<p>Python</p>"
+    )
+    seattle = _posting(
+        title="Backend Engineer",
+        location="Seattle, WA",
+        description_html="<p>Python</p>",
+    )
+
+    assert score_posting(toronto, profile).score > 0
+    assert score_posting(seattle, profile).reasons == [
+        "excluded: location/remote mismatch"
+    ]
+
+
+def test_profile_city_widens_to_its_province():
+    profile = _profile(locations=["Toronto"], remote_ok=False)
+    ottawa = _posting(
+        title="Backend Engineer",
+        location="Ottawa, ON",
+        description_html="<p>Python</p>",
+    )
+    assert score_posting(ottawa, profile).score > 0

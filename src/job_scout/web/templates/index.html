@@ -25,6 +25,18 @@
       {% endfor %}
     </select>
   </label>
+  <label>State / province
+    <select name="region">
+      <option value="">Anywhere</option>
+      {% for group, regions in region_groups %}
+      <optgroup label="{{ group }}">
+        {% for code, name in regions.items() | sort(attribute="1") %}
+        <option value="{{ code }}" {% if filters.region == code %}selected{% endif %}>{{ name }} ({{ region_counts.get(code, 0) }})</option>
+        {% endfor %}
+      </optgroup>
+      {% endfor %}
+    </select>
+  </label>
   <label><input type="checkbox" name="remote_only" value="true" {% if filters.remote_only %}checked{% endif %} /> Remote only</label>
   <label><input type="checkbox" name="new_only" value="true" {% if filters.new_only %}checked{% endif %} /> New since last visit</label>
   <button type="submit">Apply filters</button>

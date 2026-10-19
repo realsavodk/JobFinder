@@ -17,6 +17,7 @@ from job_scout.config import database_url
 from job_scout.models import CompanyRunStatus, Posting
 from job_scout.pipeline import run as pipeline_run
 from job_scout.pipeline.run import RunResult, run_all
+from job_scout.regions import CA_PROVINCES, US_STATES, regions_in
 from job_scout.resume_import import ResumeImportError, import_resume
 from job_scout.scheduler import start_scheduler
 
@@ -53,6 +54,7 @@ def index(
     company: str = "",
     remote_only: bool = False,
     new_only: bool = False,
+    region: str = "",
 ) -> HTMLResponse:
     last_visit_cookie = request.cookies.get("last_visit")
     last_visit = (
@@ -73,6 +75,14 @@ def index(
             query = query.where(Posting.first_seen > last_visit)
         query = query.order_by(Posting.score.desc(), Posting.posted_at.desc())
         postings = session.exec(query).all()
+        # Free-text locations can't be matched in SQL, so regions are filtered here.
+        posting_regions = {p.id: regions_in(p.location) for p in postings}
+        region_counts: dict[str, int] = {}
+        for codes in posting_regions.values():
+            for code in codes:
+                region_counts[code] = region_counts.get(code, 0) + 1
+        if region:
+            postings = [p for p in postings if region in posting_regions[p.id]]
 
         companies = sorted(session.exec(select(Posting.company).distinct()).all())
         run_statuses = session.exec(select(CompanyRunStatus)).all()
@@ -84,12 +94,15 @@ def index(
             "postings": postings,
             "reasons_by_id": {p.id: p.score_reasons for p in postings},
             "companies": companies,
+            "region_groups": [("United States", US_STATES), ("Canada", CA_PROVINCES)],
+            "region_counts": region_counts,
             "run_statuses": run_statuses,
             "filters": {
                 "min_score": min_score,
                 "company": company,
                 "remote_only": remote_only,
                 "new_only": new_only,
+                "region": region,
             },
         },
     )

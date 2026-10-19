@@ -137,3 +137,40 @@ def test_progress_bar_shows_running_then_done(monkeypatch, tmp_path):
     assert 'hx-trigger="every 2s"' in running
     assert "Done" in finished
     assert "every 2s" not in finished
+
+
+def test_dashboard_filters_by_state_or_province(monkeypatch, tmp_path):
+    from datetime import UTC, datetime
+
+    from sqlmodel import Session
+
+    from job_scout.models import Posting
+
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    now = datetime.now(UTC)
+    with Session(app_module._engine) as session:
+        for i, (title, location) in enumerate(
+            [("Toronto Dev", "Toronto"), ("SF Dev", "San Francisco, CA")]
+        ):
+            session.add(
+                Posting(
+                    source="greenhouse",
+                    company="Acme",
+                    external_id=str(i),
+                    title=title,
+                    location=location,
+                    url=f"https://example.com/{i}",
+                    description_html="",
+                    first_seen=now,
+                    last_seen=now,
+                )
+            )
+        session.commit()
+
+    with TestClient(app_module.app) as client:
+        ontario = client.get("/?region=ON").text
+        everywhere = client.get("/").text
+
+    assert "Toronto Dev" in ontario and "SF Dev" not in ontario
+    assert "Toronto Dev" in everywhere and "SF Dev" in everywhere
+    assert "Ontario (1)" in everywhere and "California (1)" in everywhere

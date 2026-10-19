@@ -5,7 +5,7 @@ Personalized job board. Pulls postings from company career pages (via public ATS
 ## Status
 
 - **Phase 1 (Skeleton) — done.** Greenhouse, Lever, Ashby, and Workday adapters built and verified against live APIs; fixture tests built from real responses. CLI `job-scout fetch` fills the DB.
-- **Phase 2 (MVP) — done.** Keyword-only scoring (`scoring/score.py` `_keyword_score`, `scoring/seniority.py` heuristic), FastAPI + Jinja2 + HTMX dashboard (ranked list, filters, status/notes/follow-up tracking), APScheduler daily job, expiry.
+- **Phase 2 (MVP) — done.** Keyword-only scoring (`scoring/score.py` `keyword_score`, `scoring/seniority.py` heuristic), FastAPI + Jinja2 + HTMX dashboard (ranked list, filters, status/notes/follow-up tracking), APScheduler daily job, expiry.
 - **Phase 3 (Smarter) — done.** `llm/` provider interface (Ollama default via native `/api/chat` structured outputs, OpenAI-compatible swappable), structured scoring dispatcher (`_structured_score`, falls back to keyword scoring when extraction hasn't succeeded), cross-source dedup (`pipeline/dedup.py`), `eval-extraction` CLI with 20 hand-labeled real fixtures (`evals/`). **Verified against real Ollama** (`qwen3:8b` on an RX 6800, ~50s for the 20-fixture eval): seniority 88%, min_years 100%, location 95%, remote 89%, role_family 80%, degree_fields 100%, required/nice skills 32%/22% (exact-match F1 against unreviewed labels).
 - **Phase 4 (Polish) — not started.** Embeddings in score, email digest, metrics page.
 
