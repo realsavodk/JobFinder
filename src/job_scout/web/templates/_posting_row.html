@@ -1,8 +1,26 @@
-<tr class="status-{{ posting.status }}" id="posting-{{ posting.id }}">
+{% set row = "#posting-" ~ posting.id %}
+{# The whole row saves on any change, since its inputs live in different cells. #}
+<tr class="status-{{ posting.status }}" id="posting-{{ posting.id }}"
+    hx-post="/postings/{{ posting.id }}" hx-trigger="change" hx-include="{{ row }} [name]"
+    hx-target="this" hx-swap="outerHTML">
   <td class="title">
     <a href="{{ posting.url }}" target="_blank" rel="noopener">{{ posting.title }}</a>
     <div class="sub">{{ posting.company }}{% if posting.location %} · {{ posting.location }}{% endif %}</div>
   </td>
+  {% if tab == "applied" %}
+  <td>
+    {% if posting.follow_up_date %}
+      {% set days = (posting.follow_up_date - today).days %}
+      <div class="due {{ 'overdue' if days < 0 else 'today' if days == 0 }}">
+        {% if days < 0 %}Overdue {{ -days }}d{% elif days == 0 %}Due today{% else %}In {{ days }}d{% endif %}
+      </div>
+    {% endif %}
+    <input type="date" name="follow_up_date" value="{{ posting.follow_up_date or "" }}" aria-label="Follow-up date" />
+  </td>
+  <td class="notes">
+    <textarea name="notes" placeholder="Interview dates, contacts…" aria-label="Notes">{{ posting.notes or "" }}</textarea>
+  </td>
+  {% else %}
   <td><span class="score">{{ posting.score if posting.score is not none else "–" }}</span></td>
   <td>
     <div class="tags">
@@ -12,18 +30,26 @@
     </div>
   </td>
   <td class="muted">{{ posting.posted_at.strftime("%b %d") if posting.posted_at else "–" }}</td>
+  {% endif %}
   <td class="track">
-    <form hx-post="/postings/{{ posting.id }}" hx-trigger="change" hx-target="#posting-{{ posting.id }}" hx-swap="outerHTML">
+    <input type="hidden" name="tab" value="{{ tab }}" />
+    {% if tab == "todo" %}
+    {# Sends everything but the status dropdown, so "applied" can't be overridden. #}
+    <button type="button" class="primary apply" hx-post="/postings/{{ posting.id }}"
+            hx-include="{{ row }} [name='tab'], {{ row }} [name='notes'], {{ row }} [name='follow_up_date']"
+            hx-vals='{"status": "applied"}' hx-target="{{ row }}" hx-swap="outerHTML">Mark applied</button>
+    {% endif %}
       <select name="status" aria-label="Status for {{ posting.title }}">
         {% for choice in ["new", "interested", "applied", "rejected", "hidden", "closed"] %}
         <option value="{{ choice }}" {% if posting.status == choice %}selected{% endif %}>{{ choice | capitalize }}</option>
         {% endfor %}
       </select>
+      {% if tab != "applied" %}
       <details>
         <summary>Notes{% if posting.notes or posting.follow_up_date %} ✓{% endif %}</summary>
         <textarea name="notes" placeholder="Notes" aria-label="Notes">{{ posting.notes or "" }}</textarea>
         <label class="muted">Follow up <input type="date" name="follow_up_date" value="{{ posting.follow_up_date or "" }}" /></label>
       </details>
-    </form>
+      {% endif %}
   </td>
 </tr>

@@ -4,14 +4,14 @@ import asyncio
 import tempfile
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, SQLModel, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, func, select
 
 from job_scout.config import database_url, load_companies
 from job_scout.models import CompanyRunStatus, Posting
@@ -28,6 +28,13 @@ MAX_RESUME_BYTES = 5 * 1024 * 1024
 # Discovered companies bring tens of thousands of postings; rendering them all made
 # a 50 MB page. Score 0 means excluded or no skill match, so it's hidden by default.
 MAX_ROWS = 500
+FOLLOW_UP_AFTER = timedelta(days=7)
+# Jobs page tabs: label and the posting statuses each one shows.
+TABS = {
+    "todo": ("To apply", ("new", "interested")),
+    "applied": ("Applied", ("applied",)),
+    "archive": ("Archive", ("rejected", "hidden", "closed")),
+}
 
 _run_task: asyncio.Task[list[RunResult]] | None = None
 
@@ -58,25 +65,47 @@ def index(
     remote_only: bool = False,
     new_only: bool = False,
     region: str = "",
+    tab: str = "todo",
 ) -> HTMLResponse:
+    tab = tab if tab in TABS else "todo"
     last_visit_cookie = request.cookies.get("last_visit")
     last_visit = (
         datetime.fromisoformat(last_visit_cookie) if last_visit_cookie else None
     )
 
     with _session() as session:
-        query = select(Posting).where(
-            Posting.status != "hidden", Posting.duplicate_of_id.is_(None)
+        status_counts = dict(
+            session.exec(
+                select(Posting.status, func.count())
+                .where(Posting.duplicate_of_id.is_(None))
+                .group_by(Posting.status)
+            ).all()
         )
-        if min_score:
-            query = query.where(Posting.score >= min_score)
-        if company:
-            query = query.where(Posting.company == company)
-        if remote_only:
-            query = query.where(Posting.location.ilike("%remote%"))
-        if new_only and last_visit is not None:
-            query = query.where(Posting.first_seen > last_visit)
-        query = query.order_by(Posting.score.desc(), Posting.posted_at.desc())
+        tab_counts = {
+            key: sum(status_counts.get(s, 0) for s in statuses)
+            for key, (_label, statuses) in TABS.items()
+        }
+        query = select(Posting).where(
+            Posting.status.in_(TABS[tab][1]), Posting.duplicate_of_id.is_(None)
+        )
+        if tab == "applied":
+            # Next steps first: soonest follow-up at the top, undated ones last.
+            query = query.order_by(
+                Posting.follow_up_date.is_(None), Posting.follow_up_date
+            )
+        elif tab == "archive":
+            query = query.order_by(Posting.last_seen.desc())
+        # Filters narrow the big to-apply list; Applied and Archive always show all.
+        if tab == "todo":
+            if min_score:
+                query = query.where(Posting.score >= min_score)
+            if company:
+                query = query.where(Posting.company == company)
+            if remote_only:
+                query = query.where(Posting.location.ilike("%remote%"))
+            if new_only and last_visit is not None:
+                query = query.where(Posting.first_seen > last_visit)
+            query = query.order_by(Posting.score.desc(), Posting.posted_at.desc())
         postings = session.exec(query).all()
         # Free-text locations can't be matched in SQL, so regions are filtered here.
         posting_regions = {p.id: regions_in(p.location) for p in postings}
@@ -84,7 +113,7 @@ def index(
         for codes in posting_regions.values():
             for code in codes:
                 region_counts[code] = region_counts.get(code, 0) + 1
-        if region:
+        if region and tab == "todo":
             postings = [p for p in postings if region in posting_regions[p.id]]
         total_matches = len(postings)
         postings = postings[:MAX_ROWS]
@@ -97,6 +126,10 @@ def index(
         {
             "postings": postings,
             "total_matches": total_matches,
+            "tab": tab,
+            "tabs": TABS,
+            "tab_counts": tab_counts,
+            "today": date.today(),
             "reasons_by_id": {p.id: p.score_reasons for p in postings},
             "companies": companies,
             "region_groups": [("United States", US_STATES), ("Canada", CA_PROVINCES)],
@@ -110,7 +143,8 @@ def index(
             },
         },
     )
-    response.set_cookie("last_visit", datetime.now(UTC).isoformat())
+    if tab == "todo":  # browsing other tabs shouldn't reset "new since last visit"
+        response.set_cookie("last_visit", datetime.now(UTC).isoformat())
     return response
 
 
@@ -121,23 +155,31 @@ def update_posting(
     status: str = Form(...),
     notes: str = Form(""),
     follow_up_date: str = Form(""),
+    tab: str = Form(""),
 ) -> HTMLResponse:
     with _session() as session:
         posting = session.get(Posting, posting_id)
         if posting is None:
             return HTMLResponse(status_code=404)
+        just_applied = status == "applied" and posting.status != "applied"
         posting.status = status
         posting.notes = notes or None
         posting.follow_up_date = (
             date.fromisoformat(follow_up_date) if follow_up_date else None
         )
+        if just_applied and posting.follow_up_date is None:
+            posting.follow_up_date = date.today() + FOLLOW_UP_AFTER
         session.add(posting)
         session.commit()
         session.refresh(posting)
         reasons = posting.score_reasons
 
+    if tab in TABS and posting.status not in TABS[tab][1]:
+        return HTMLResponse("")  # it moved to another tab: drop the row from this one
     return templates.TemplateResponse(
-        request, "_posting_row.html", {"posting": posting, "reasons": reasons}
+        request,
+        "_posting_row.html",
+        {"posting": posting, "reasons": reasons, "tab": tab, "today": date.today()},
     )
 
 

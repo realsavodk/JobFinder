@@ -241,3 +241,105 @@ def test_companies_page_lists_failures_first(monkeypatch, tmp_path):
     assert "1 failed on the last run" in page
     assert page.index("Zeta") < page.index("Alpha")
     assert "HTTP 500" not in jobs  # run status no longer clutters the jobs page
+
+
+def _add_postings(app_module, *rows):
+    """rows: (title, status, follow_up_date) tuples."""
+    from datetime import UTC, datetime
+
+    from sqlmodel import Session
+
+    from job_scout.models import Posting
+
+    now = datetime.now(UTC)
+    ids = []
+    with Session(app_module._engine) as session:
+        for i, (title, status, follow_up) in enumerate(rows):
+            posting = Posting(
+                source="greenhouse",
+                company="Acme",
+                external_id=str(i),
+                title=title,
+                location="Toronto",
+                url=f"https://example.com/{i}",
+                description_html="",
+                first_seen=now,
+                last_seen=now,
+                score=40,
+                status=status,
+                follow_up_date=follow_up,
+            )
+            session.add(posting)
+            session.commit()
+            ids.append(posting.id)
+    return ids
+
+
+def test_jobs_tabs_split_by_status(monkeypatch, tmp_path):
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    _add_postings(
+        app_module,
+        ("Todo Job", "new", None),
+        ("Liked Job", "interested", None),
+        ("Applied Job", "applied", None),
+        ("Rejected Job", "rejected", None),
+    )
+    with TestClient(app_module.app) as client:
+        todo = client.get("/").text
+        applied = client.get("/?tab=applied").text
+        archive = client.get("/?tab=archive").text
+
+    assert "Todo Job" in todo and "Liked Job" in todo
+    assert "Applied Job" not in todo and "Rejected Job" not in todo
+    assert "Applied Job" in applied and "Todo Job" not in applied
+    assert "Rejected Job" in archive and "Applied Job" not in archive
+    assert 'Applied<span class="count">1</span>' in todo
+
+
+def test_mark_applied_sets_a_follow_up_and_leaves_the_to_apply_tab(
+    monkeypatch, tmp_path
+):
+    from datetime import date
+
+    from sqlmodel import Session
+
+    from job_scout.models import Posting
+
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    (posting_id,) = _add_postings(app_module, ("Todo Job", "new", None))
+    with TestClient(app_module.app) as client:
+        response = client.post(
+            f"/postings/{posting_id}",
+            data={
+                "status": "applied",
+                "tab": "todo",
+                "notes": "",
+                "follow_up_date": "",
+            },
+        )
+    with Session(app_module._engine) as session:
+        posting = session.get(Posting, posting_id)
+
+    assert response.text == ""  # row removed from the To apply list
+    assert posting.status == "applied"
+    assert posting.follow_up_date == date.today() + app_module.FOLLOW_UP_AFTER
+
+
+def test_applied_tab_lists_soonest_follow_up_first(monkeypatch, tmp_path):
+    from datetime import date, timedelta
+
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    today = date.today()
+    _add_postings(
+        app_module,
+        ("No Date Job", "applied", None),
+        ("Later Job", "applied", today + timedelta(days=5)),
+        ("Overdue Job", "applied", today - timedelta(days=2)),
+    )
+    with TestClient(app_module.app) as client:
+        page = client.get("/?tab=applied").text
+
+    assert (
+        page.index("Overdue Job") < page.index("Later Job") < page.index("No Date Job")
+    )
+    assert "Overdue 2d" in page and "In 5d" in page

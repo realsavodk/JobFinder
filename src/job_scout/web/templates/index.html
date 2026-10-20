@@ -23,10 +23,31 @@
   td.track summary { cursor: pointer; color: var(--muted); }
   td.track textarea { width: 13rem; height: 3.5rem; display: block; margin: 0.35rem 0; }
   tr.status-closed, tr.status-rejected { opacity: 0.55; }
+
+  .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+  .tabs a {
+    text-decoration: none; color: var(--muted); padding: 0.55rem 0.9rem;
+    border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 600;
+  }
+  .tabs a:hover { color: var(--text); }
+  .tabs a[aria-current="page"] { color: var(--green); border-bottom-color: var(--green); }
+  .count { font-size: 0.78rem; background: var(--green-tint); color: var(--green); border-radius: 999px; padding: 0.05rem 0.45rem; margin-left: 0.3rem; }
+  button.apply { width: 100%; margin-bottom: 0.35rem; }
+  .due { font-weight: 600; white-space: nowrap; }
+  .due.overdue { color: var(--danger); }
+  .due.today { color: var(--green); }
+  td.notes textarea { width: 100%; min-width: 14rem; height: 3.2rem; }
 {% endblock %}
 {% block content %}
 
 <h1>Jobs</h1>
+<nav class="tabs" aria-label="Job lists">
+  {% for key, (label, _statuses) in tabs.items() %}
+  <a href="/?tab={{ key }}" {% if tab == key %}aria-current="page"{% endif %}>{{ label }}{% if key != "todo" %}<span class="count">{{ tab_counts[key] }}</span>{% endif %}</a>
+  {% endfor %}
+</nav>
+
+{% if tab == "todo" %}
 <form class="filters card" method="get" action="/">
   <label>Min score <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100" /></label>
   <label>Company
@@ -53,6 +74,7 @@
   <label class="check"><input type="checkbox" name="new_only" value="true" {% if filters.new_only %}checked{% endif %} /> New since last visit</label>
   <button type="submit" class="primary">Apply</button>
 </form>
+{% endif %}
 
 {% if postings %}
 <p class="summary muted">
@@ -64,7 +86,13 @@
 </p>
 <div class="card table-card">
 <table>
-  <thead><tr><th>Job</th><th>Score</th><th>Why it matches</th><th>Posted</th><th>Status</th></tr></thead>
+  <thead><tr>
+    {% if tab == "applied" %}
+    <th>Job</th><th>Follow up</th><th>Notes</th><th>Status</th>
+    {% else %}
+    <th>Job</th><th>Score</th><th>Why it matches</th><th>Posted</th><th>{{ "Next step" if tab == "todo" else "Status" }}</th>
+    {% endif %}
+  </tr></thead>
   <tbody>
   {% for posting in postings %}
     {% set reasons = reasons_by_id[posting.id] %}
@@ -74,7 +102,11 @@
 </table>
 </div>
 {% else %}
-<p class="card muted">No postings match these filters.</p>
+<p class="card muted">
+  {% if tab == "applied" %}Nothing applied to yet. Use "Mark applied" on the To apply tab once you've applied.
+  {% elif tab == "archive" %}Nothing archived. Jobs you reject or hide, and postings that close, end up here.
+  {% else %}No postings match these filters.{% endif %}
+</p>
 {% endif %}
 
 {% endblock %}
