@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, SQLModel, create_engine, select
 
-from job_scout.config import database_url
+from job_scout.config import database_url, load_companies
 from job_scout.models import CompanyRunStatus, Posting
 from job_scout.pipeline import run as pipeline_run
 from job_scout.pipeline.run import RunResult, run_all
@@ -25,6 +25,9 @@ COMPANIES_FILE = Path("companies.yaml")
 PROFILE_FILE = Path("profile.yaml")
 RESUME_SUFFIXES = {".pdf", ".txt", ".md"}
 MAX_RESUME_BYTES = 5 * 1024 * 1024
+# Discovered companies bring tens of thousands of postings; rendering them all made
+# a 50 MB page. Score 0 means excluded or no skill match, so it's hidden by default.
+MAX_ROWS = 500
 
 _run_task: asyncio.Task[list[RunResult]] | None = None
 
@@ -50,7 +53,7 @@ def _session() -> Session:
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
-    min_score: int = 0,
+    min_score: int = 1,
     company: str = "",
     remote_only: bool = False,
     new_only: bool = False,
@@ -83,20 +86,21 @@ def index(
                 region_counts[code] = region_counts.get(code, 0) + 1
         if region:
             postings = [p for p in postings if region in posting_regions[p.id]]
+        total_matches = len(postings)
+        postings = postings[:MAX_ROWS]
 
         companies = sorted(session.exec(select(Posting.company).distinct()).all())
-        run_statuses = session.exec(select(CompanyRunStatus)).all()
 
     response = templates.TemplateResponse(
         request,
         "index.html",
         {
             "postings": postings,
+            "total_matches": total_matches,
             "reasons_by_id": {p.id: p.score_reasons for p in postings},
             "companies": companies,
             "region_groups": [("United States", US_STATES), ("Canada", CA_PROVINCES)],
             "region_counts": region_counts,
-            "run_statuses": run_statuses,
             "filters": {
                 "min_score": min_score,
                 "company": company,
@@ -165,6 +169,23 @@ def _render_config(
             "resume_error": resume_error,
         },
         status_code=400 if resume_error else 200,
+    )
+
+
+@app.get("/companies", response_class=HTMLResponse)
+def companies_page(request: Request) -> HTMLResponse:
+    with _session() as session:
+        statuses = session.exec(select(CompanyRunStatus)).all()
+    # Companies removed from companies.yaml keep their old status rows; hide those.
+    if COMPANIES_FILE.exists():
+        current = {c.name for c in load_companies(COMPANIES_FILE)}
+        statuses = [s for s in statuses if s.company in current]
+    # Failures first: they're the rows that need attention.
+    statuses = sorted(statuses, key=lambda s: (s.ok, s.company.lower()))
+    return templates.TemplateResponse(
+        request,
+        "companies.html",
+        {"statuses": statuses, "failed": sum(not s.ok for s in statuses)},
     )
 
 

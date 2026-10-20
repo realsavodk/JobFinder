@@ -4,6 +4,7 @@ import argparse
 import asyncio
 from pathlib import Path
 
+from job_scout.discover import run_discover
 from job_scout.eval_extraction import run_eval_extraction
 from job_scout.pipeline.run import run_all
 from job_scout.resume_import import ResumeImportError, import_resume
@@ -45,6 +46,23 @@ def main() -> None:
         "--profile-file", type=Path, default=Path("profile.yaml")
     )
 
+    discover_parser = subparsers.add_parser(
+        "discover",
+        help="Find companies' job boards in Common Crawl and list the live ones",
+    )
+    discover_parser.add_argument(
+        "--crawls", type=int, default=12, help="how many recent crawls to search"
+    )
+    discover_parser.add_argument(
+        "--out", type=Path, default=Path("discovered_companies.yaml")
+    )
+    discover_parser.add_argument("--cache-dir", type=Path, default=Path(".discovery"))
+    discover_parser.add_argument(
+        "--region",
+        type=str.upper,
+        help="only list companies with open jobs in this state/province, e.g. ON",
+    )
+
     args = parser.parse_args()
     if args.command == "fetch":
         results = asyncio.run(run_all(args.companies_file, args.profile_file))
@@ -56,6 +74,8 @@ def main() -> None:
         uvicorn.run("job_scout.web.app:app", host=args.host, port=args.port)
     elif args.command == "eval-extraction":
         asyncio.run(run_eval_extraction(args.fixtures_dir, args.labels_file))
+    elif args.command == "discover":
+        asyncio.run(run_discover(args.crawls, args.out, args.cache_dir, args.region))
     elif args.command == "import-resume":
         try:
             lines = asyncio.run(import_resume(args.resume, args.profile_file))

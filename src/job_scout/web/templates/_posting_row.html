@@ -1,21 +1,29 @@
 <tr class="status-{{ posting.status }}" id="posting-{{ posting.id }}">
-  <td><a href="{{ posting.url }}" target="_blank" rel="noopener">{{ posting.title }}</a></td>
-  <td>{{ posting.company }}</td>
-  <td>{{ posting.location }}</td>
-  <td class="score">{{ posting.score if posting.score is not none else "-" }}</td>
-  <td class="reasons">{{ reasons | join(", ") }}</td>
-  <td>{{ posting.posted_at.strftime("%Y-%m-%d") if posting.posted_at else "-" }}</td>
+  <td class="title">
+    <a href="{{ posting.url }}" target="_blank" rel="noopener">{{ posting.title }}</a>
+    <div class="sub">{{ posting.company }}{% if posting.location %} · {{ posting.location }}{% endif %}</div>
+  </td>
+  <td><span class="score">{{ posting.score if posting.score is not none else "–" }}</span></td>
   <td>
+    <div class="tags">
+      {% for reason in reasons %}
+      <span class="tag {% if reason.startswith('excluded') %}out{% elif '(required)' in reason %}req{% endif %}">{{ reason | replace(" (required)", "") | replace(" (nice-to-have)", "") }}</span>
+      {% endfor %}
+    </div>
+  </td>
+  <td class="muted">{{ posting.posted_at.strftime("%b %d") if posting.posted_at else "–" }}</td>
+  <td class="track">
     <form hx-post="/postings/{{ posting.id }}" hx-trigger="change" hx-target="#posting-{{ posting.id }}" hx-swap="outerHTML">
-      <select name="status">
+      <select name="status" aria-label="Status for {{ posting.title }}">
         {% for choice in ["new", "interested", "applied", "rejected", "hidden", "closed"] %}
-        <option value="{{ choice }}" {% if posting.status == choice %}selected{% endif %}>{{ choice }}</option>
+        <option value="{{ choice }}" {% if posting.status == choice %}selected{% endif %}>{{ choice | capitalize }}</option>
         {% endfor %}
       </select>
-      <br />
-      <textarea name="notes" placeholder="notes">{{ posting.notes or "" }}</textarea>
-      <br />
-      <input type="date" name="follow_up_date" value="{{ posting.follow_up_date or "" }}" />
+      <details>
+        <summary>Notes{% if posting.notes or posting.follow_up_date %} ✓{% endif %}</summary>
+        <textarea name="notes" placeholder="Notes" aria-label="Notes">{{ posting.notes or "" }}</textarea>
+        <label class="muted">Follow up <input type="date" name="follow_up_date" value="{{ posting.follow_up_date or "" }}" /></label>
+      </details>
     </form>
   </td>
 </tr>

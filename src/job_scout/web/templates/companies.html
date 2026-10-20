@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block styles %}
+  .pill { font-size: 0.78rem; padding: 0.1rem 0.55rem; border-radius: 999px; font-weight: 600; }
+  .pill.ok { background: var(--green-tint); color: var(--green); }
+  .pill.bad { background: var(--danger-tint); color: var(--danger); }
+  td.msg { color: var(--muted); font-size: 0.88rem; word-break: break-word; }
+  td.when { white-space: nowrap; }
+  td, th { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+{% endblock %}
+{% block content %}
+
+<h1>Companies</h1>
+<p class="muted">
+  {{ statuses | length }} companies from companies.yaml ·
+  {% if failed %}<strong style="color: var(--danger)">{{ failed }} failed on the last run</strong> (listed first){% else %}all fetched fine on the last run{% endif %}
+</p>
+
+{% if statuses %}
+<div class="card table-card">
+<table>
+  <thead><tr><th>Company</th><th>Last run</th><th>Result</th><th>Details</th></tr></thead>
+  <tbody>
+  {% for run in statuses %}
+  <tr>
+    <td>{{ run.company }}</td>
+    <td class="muted when">{{ run.last_run_at.strftime("%b %d, %H:%M") if run.last_run_at else "never" }}</td>
+    <td><span class="pill {{ 'ok' if run.ok else 'bad' }}">{{ "OK" if run.ok else "Failed" }}</span></td>
+    <td class="msg">{{ run.message }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="card muted">No runs yet. Click "Run now" to fetch postings.</p>
+{% endif %}
+
+{% endblock %}

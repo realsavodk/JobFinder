@@ -48,3 +48,20 @@ def test_request_json_raises_after_max_retries():
 
     with pytest.raises(httpx.HTTPStatusError):
         asyncio.run(run())
+
+
+def test_request_json_does_not_retry_client_errors():
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        return httpx.Response(404)
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            await job_http.request_json(client, "GET", "https://example.com/jobs")
+
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(run())
+    assert calls["n"] == 1

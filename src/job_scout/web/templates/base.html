@@ -2,47 +2,125 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Job Scout</title>
   <script src="https://unpkg.com/htmx.org@1.9.10"></script>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
-    a { color: #2563eb; }
-    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-    th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #ddd; vertical-align: top; }
-    th { background: #f5f5f5; }
-    nav a { margin-right: 1rem; }
-    form.filters { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-    .score { font-weight: bold; }
-    .reasons { color: #555; font-size: 0.9em; }
-    tr.status-closed { opacity: 0.5; }
-    tr.status-rejected { opacity: 0.5; }
-    input[type="text"], textarea, select, input[type="date"] { font-size: 0.9em; }
-    textarea { width: 14rem; height: 2.5rem; }
-    label.button { font: inherit; font-size: 0.83em; padding: 1px 6px; border: 1px solid #767676; border-radius: 3px; background: #efefef; cursor: pointer; }
-    label.button:focus-within { outline: 2px solid #2563eb; }
-    .error { color: #b91c1c; }
-    .progress { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; padding: 0.5rem 0.75rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 4px; }
-    .progress progress { flex: 1; min-width: 10rem; }
-    .progress.done { background: #f0fdf4; border-color: #bbf7d0; }
+    :root {
+      --bg: #f7f5ee;          /* off-white page */
+      --surface: #fffefa;     /* cards */
+      --border: #e3e0d4;
+      --text: #1e2b23;
+      --muted: #66716a;
+      --green: #2e6b47;
+      --green-hover: #24563a;
+      --green-tint: #e6efe8;
+      --green-line: #c3d9c9;
+      --danger: #a63a2b;
+      --danger-tint: #f8e9e5;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    a { color: var(--green); }
+    a:hover { color: var(--green-hover); }
+    main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 1rem; }
+    h2 { font-size: 1.1rem; margin: 1.5rem 0 0.75rem; }
+    .muted { color: var(--muted); }
+
+    /* Header */
+    header {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .bar {
+      max-width: 1200px; margin: 0 auto; padding: 0.6rem 1rem;
+      display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+    }
+    .brand { font-weight: 700; color: var(--green); text-decoration: none; font-size: 1.1rem; }
+    nav { display: flex; gap: 0.25rem; }
+    nav a {
+      color: var(--muted); text-decoration: none; padding: 0.35rem 0.7rem; border-radius: 6px;
+    }
+    nav a:hover { color: var(--text); background: var(--green-tint); }
+    nav a[aria-current="page"] { color: var(--green); background: var(--green-tint); font-weight: 600; }
+    .actions { margin-left: auto; display: flex; gap: 0.5rem; align-items: center; }
+    .actions form { margin: 0; }
+
+    /* Buttons and inputs */
+    button, .button {
+      font: inherit; font-size: 0.9rem; cursor: pointer; border-radius: 6px;
+      padding: 0.4rem 0.85rem; border: 1px solid var(--green-line);
+      background: var(--surface); color: var(--green); display: inline-block;
+    }
+    button:hover, .button:hover { background: var(--green-tint); }
+    button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+    button.primary:hover { background: var(--green-hover); }
+    .button:focus-within, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--green); outline-offset: 2px;
+    }
+    input, select, textarea {
+      font: inherit; font-size: 0.9rem; color: var(--text); background: #fff;
+      border: 1px solid var(--border); border-radius: 6px; padding: 0.3rem 0.5rem;
+    }
+    input[type="checkbox"] { accent-color: var(--green); }
+
+    /* Cards and tables */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1rem;
+    }
+    .table-card { padding: 0; overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 0.65rem 0.8rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #fbfaf5; }
+
+    .error { color: var(--danger); background: var(--danger-tint); padding: 0.6rem 0.8rem; border-radius: 6px; }
+    pre { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; overflow-x: auto; font-size: 0.85rem; }
+
+    /* Progress */
+    .progress {
+      display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;
+      padding: 0.6rem 0.9rem; background: var(--green-tint); border: 1px solid var(--green-line); border-radius: var(--radius);
+    }
+    .progress progress { flex: 1; min-width: 10rem; accent-color: var(--green); }
+    .progress.done { background: var(--surface); }
+    {% block styles %}{% endblock %}
   </style>
 </head>
 <body>
-  <nav>
-    <a href="/">Dashboard</a>
-    <a href="/config">Config</a>
-    <form method="post" action="/run" style="display:inline">
-      <button type="submit">Run now</button>
-    </form>
-    <form method="post" action="/resume" enctype="multipart/form-data" style="display:inline">
-      <label class="button">
-        Upload resume
-        <input type="file" name="resume" accept=".pdf,.txt,.md" hidden
-               onchange="this.form.querySelector('label').firstChild.textContent = 'Parsing resume… '; this.form.submit()" />
-      </label>
-    </form>
-  </nav>
-  <div hx-get="/progress" hx-trigger="load" hx-swap="outerHTML"></div>
-  <h1>Job Scout</h1>
-  {% block content %}{% endblock %}
+  <header>
+    <div class="bar">
+      <a class="brand" href="/">Job Scout</a>
+      {% set path = request.url.path %}
+      <nav aria-label="Main">
+        <a href="/" {% if path == "/" %}aria-current="page"{% endif %}>Jobs</a>
+        <a href="/companies" {% if path == "/companies" %}aria-current="page"{% endif %}>Companies</a>
+        <a href="/config" {% if path in ("/config", "/resume") %}aria-current="page"{% endif %}>Profile</a>
+      </nav>
+      <div class="actions">
+        <form method="post" action="/resume" enctype="multipart/form-data">
+          <label class="button">
+            Upload resume
+            <input type="file" name="resume" accept=".pdf,.txt,.md" hidden
+                   onchange="this.form.querySelector('label').firstChild.textContent = 'Parsing resume… '; this.form.submit()" />
+          </label>
+        </form>
+        <form method="post" action="/run">
+          <button type="submit" class="primary">Run now</button>
+        </form>
+      </div>
+    </div>
+  </header>
+  <main>
+    <div hx-get="/progress" hx-trigger="load" hx-swap="outerHTML"></div>
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>

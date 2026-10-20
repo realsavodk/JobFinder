@@ -1,25 +1,37 @@
 {% extends "base.html" %}
+{% block styles %}
+  form.filters { display: flex; gap: 0.75rem 1.25rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
+  form.filters label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+  form.filters label.check { flex-direction: row; align-items: center; gap: 0.4rem; font-size: 0.9rem; color: var(--text); padding-bottom: 0.35rem; }
+  form.filters input[type="number"] { width: 5rem; }
+  form.filters select { max-width: 14rem; }
+  .summary { margin: 0 0 0.6rem; font-size: 0.9rem; }
+
+  .title a { font-weight: 600; text-decoration: none; }
+  .title a:hover { text-decoration: underline; }
+  .sub { color: var(--muted); font-size: 0.85rem; margin-top: 0.15rem; }
+  .score {
+    display: inline-block; min-width: 2.4rem; text-align: center; font-weight: 700;
+    padding: 0.15rem 0.45rem; border-radius: 999px; background: var(--green-tint); color: var(--green);
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .tag { font-size: 0.78rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
+  .tag.req { border-color: var(--green-line); color: var(--green); background: var(--green-tint); }
+  .tag.out { border-color: #ecc7bf; color: var(--danger); background: var(--danger-tint); }
+  td.track select { width: 7.5rem; }
+  td.track details { margin-top: 0.35rem; font-size: 0.85rem; }
+  td.track summary { cursor: pointer; color: var(--muted); }
+  td.track textarea { width: 13rem; height: 3.5rem; display: block; margin: 0.35rem 0; }
+  tr.status-closed, tr.status-rejected { opacity: 0.55; }
+{% endblock %}
 {% block content %}
 
-<h2>Run status</h2>
-<table>
-  <tr><th>Company</th><th>Last run</th><th>OK</th><th>Message</th></tr>
-  {% for run in run_statuses %}
-  <tr>
-    <td>{{ run.company }}</td>
-    <td>{{ run.last_run_at.strftime("%Y-%m-%d %H:%M") if run.last_run_at else "never" }}</td>
-    <td>{{ "yes" if run.ok else "no" }}</td>
-    <td>{{ run.message }}</td>
-  </tr>
-  {% endfor %}
-</table>
-
-<h2>Postings</h2>
-<form class="filters" method="get" action="/">
+<h1>Jobs</h1>
+<form class="filters card" method="get" action="/">
   <label>Min score <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100" /></label>
   <label>Company
     <select name="company">
-      <option value="">All</option>
+      <option value="">All companies</option>
       {% for c in companies %}
       <option value="{{ c }}" {% if filters.company == c %}selected{% endif %}>{{ c }}</option>
       {% endfor %}
@@ -37,18 +49,32 @@
       {% endfor %}
     </select>
   </label>
-  <label><input type="checkbox" name="remote_only" value="true" {% if filters.remote_only %}checked{% endif %} /> Remote only</label>
-  <label><input type="checkbox" name="new_only" value="true" {% if filters.new_only %}checked{% endif %} /> New since last visit</label>
-  <button type="submit">Apply filters</button>
+  <label class="check"><input type="checkbox" name="remote_only" value="true" {% if filters.remote_only %}checked{% endif %} /> Remote only</label>
+  <label class="check"><input type="checkbox" name="new_only" value="true" {% if filters.new_only %}checked{% endif %} /> New since last visit</label>
+  <button type="submit" class="primary">Apply</button>
 </form>
 
+{% if postings %}
+<p class="summary muted">
+  {% if total_matches > postings | length %}
+  Showing the top {{ postings | length }} of {{ total_matches }} matches. Raise the minimum score or add filters to narrow it down.
+  {% else %}
+  {{ total_matches }} match{{ "es" if total_matches != 1 }}
+  {% endif %}
+</p>
+<div class="card table-card">
 <table>
-  <tr><th>Title</th><th>Company</th><th>Location</th><th>Score</th><th>Reasons</th><th>Posted</th><th>Status / Notes</th></tr>
+  <thead><tr><th>Job</th><th>Score</th><th>Why it matches</th><th>Posted</th><th>Status</th></tr></thead>
+  <tbody>
   {% for posting in postings %}
     {% set reasons = reasons_by_id[posting.id] %}
     {% include "_posting_row.html" %}
   {% endfor %}
+  </tbody>
 </table>
-{% if not postings %}<p>No postings match these filters.</p>{% endif %}
+</div>
+{% else %}
+<p class="card muted">No postings match these filters.</p>
+{% endif %}
 
 {% endblock %}

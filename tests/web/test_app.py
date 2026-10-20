@@ -163,6 +163,7 @@ def test_dashboard_filters_by_state_or_province(monkeypatch, tmp_path):
                     description_html="",
                     first_seen=now,
                     last_seen=now,
+                    score=50,
                 )
             )
         session.commit()
@@ -174,3 +175,69 @@ def test_dashboard_filters_by_state_or_province(monkeypatch, tmp_path):
     assert "Toronto Dev" in ontario and "SF Dev" not in ontario
     assert "Toronto Dev" in everywhere and "SF Dev" in everywhere
     assert "Ontario (1)" in everywhere and "California (1)" in everywhere
+
+
+def test_dashboard_hides_zero_scores_by_default_and_caps_rows(monkeypatch, tmp_path):
+    from datetime import UTC, datetime
+
+    from sqlmodel import Session
+
+    from job_scout.models import Posting
+
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    monkeypatch.setattr(app_module, "MAX_ROWS", 2)
+    now = datetime.now(UTC)
+    with Session(app_module._engine) as session:
+        for i, score in enumerate([0, 30, 20, 10]):
+            session.add(
+                Posting(
+                    source="greenhouse",
+                    company="Acme",
+                    external_id=str(i),
+                    title=f"Job scoring {score}",
+                    location="Remote",
+                    url=f"https://example.com/{i}",
+                    description_html="",
+                    first_seen=now,
+                    last_seen=now,
+                    score=score,
+                )
+            )
+        session.commit()
+
+    with TestClient(app_module.app) as client:
+        default = client.get("/").text
+        everything = client.get("/?min_score=0").text
+
+    assert "Job scoring 30" in default and "Job scoring 20" in default
+    assert "Job scoring 10" not in default  # past the row cap
+    assert "Job scoring 0<" not in default
+    assert "Showing the top 2 of 3 matches" in default
+    assert "Showing the top 2 of 4 matches" in everything
+
+
+def test_companies_page_lists_failures_first(monkeypatch, tmp_path):
+    from sqlmodel import Session
+
+    from job_scout.models import CompanyRunStatus
+
+    app_module = _fresh_app_module(monkeypatch, tmp_path)
+    companies = tmp_path / "companies.yaml"
+    companies.write_text(
+        "- {name: Alpha, ats: lever, token: a}\n- {name: Zeta, ats: lever, token: z}\n"
+    )
+    monkeypatch.setattr(app_module, "COMPANIES_FILE", companies)
+    with Session(app_module._engine) as session:
+        session.add(CompanyRunStatus(company="Alpha", ok=True, message="10 postings"))
+        session.add(CompanyRunStatus(company="Zeta", ok=False, message="HTTP 500"))
+        session.add(CompanyRunStatus(company="Removed", ok=False, message="old"))
+        session.commit()
+
+    with TestClient(app_module.app) as client:
+        page = client.get("/companies").text
+        jobs = client.get("/").text
+
+    assert "2 companies" in page and "Removed" not in page
+    assert "1 failed on the last run" in page
+    assert page.index("Zeta") < page.index("Alpha")
+    assert "HTTP 500" not in jobs  # run status no longer clutters the jobs page

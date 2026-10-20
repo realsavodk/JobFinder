@@ -43,8 +43,14 @@ async def request_json(
             response = await client.request(method, url, headers=headers, **kwargs)
             response.raise_for_status()
             return response
-        except (httpx.HTTPStatusError, httpx.TransportError):
-            if attempt == MAX_RETRIES:
+        except (httpx.HTTPStatusError, httpx.TransportError) as exc:
+            # A 404 won't change on retry; only server errors and 429 might.
+            client_error = (
+                isinstance(exc, httpx.HTTPStatusError)
+                and exc.response.status_code < 500
+                and exc.response.status_code != 429
+            )
+            if client_error or attempt == MAX_RETRIES:
                 raise
             await asyncio.sleep(2 ** (attempt - 1))
     raise AssertionError("unreachable")  # pragma: no cover

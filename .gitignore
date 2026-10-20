@@ -9,6 +9,11 @@ __pycache__/
 companies.yaml
 profile.yaml
 profile.yaml.bak
+companies.yaml.bak
 
 # local dev database
 *.db
+
+# job-scout discover output and its cache
+discovered_companies.yaml
+.discovery/
