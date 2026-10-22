@@ -28,3 +28,14 @@ remote_ok: true
 exclude_keywords:
   - unpaid
   - commission only
+
+# Remote jobs only count if they mention this country (leave out to allow any remote).
+# remote_country: Canada
+
+# Only fetch and store postings whose title has one of these words (leave empty for all).
+title_keywords:
+  - software
+  - developer
+  - full stack
+  - frontend
+  - backend

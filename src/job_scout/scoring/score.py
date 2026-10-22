@@ -11,7 +11,12 @@ from job_scout.scoring.seniority import estimate_min_years
 
 TOOL_WEIGHT = 1.0
 MAJOR_WEIGHT = 2.0
-NICE_SKILL_FACTOR = 0.5
+# LLM-extracted postings: the share of the job's required skills you have counts
+# for this much of the score, its nice-to-haves for the rest.
+REQUIRED_SHARE = 0.8
+# A list this short is usually extraction missing skills, so one match out of one
+# shouldn't read as a perfect fit: shorter lists count as this long.
+MIN_LISTED_SKILLS = 3
 
 
 @dataclass
@@ -38,13 +43,43 @@ def _same_region(location: str, profile: Profile) -> bool:
     return bool(wanted & regions_in(location))
 
 
+def _remote_country_ok(location: str, profile: Profile) -> bool:
+    country = profile.remote_country
+    return (
+        country is None
+        or country.lower() in location.lower()
+        or _same_region(location, profile)
+    )
+
+
+def location_matches(location: str, profile: Profile) -> bool:
+    lower = location.lower()
+    return (
+        any(loc.lower() in lower for loc in profile.locations)
+        or _same_region(location, profile)
+        or (
+            profile.remote_ok
+            and "remote" in lower
+            and _remote_country_ok(location, profile)
+        )
+    )
+
+
+def title_matches(title: str, profile: Profile) -> bool:
+    return not profile.title_keywords or any(
+        _mentions(title.lower(), keyword) for keyword in profile.title_keywords
+    )
+
+
+def is_relevant(title: str, location: str, profile: Profile) -> bool:
+    """Worth fetching and storing at all: the right kind of role, somewhere wanted."""
+    return title_matches(title, profile) and (
+        not profile.locations or location_matches(location, profile)
+    )
+
+
 def _location_matches(posting: Posting, profile: Profile) -> bool:
-    location = posting.location.lower()
-    if any(loc.lower() in location for loc in profile.locations):
-        return True
-    if _same_region(posting.location, profile):
-        return True
-    return profile.remote_ok and "remote" in location
+    return location_matches(posting.location, profile)
 
 
 def score_posting(posting: Posting, profile: Profile) -> ScoreResult:
@@ -106,7 +141,13 @@ def _structured_location_matches(posting: Posting, profile: Profile) -> bool:
     return (
         any(loc.lower() in extracted_location for loc in profile.locations)
         or _same_region(posting.extracted_location or "", profile)
-        or (profile.remote_ok and remote in ("remote", "hybrid"))
+        or (
+            profile.remote_ok
+            and remote in ("remote", "hybrid")
+            and _remote_country_ok(
+                f"{posting.extracted_location or ''} {posting.location}", profile
+            )
+        )
     )
 
 
@@ -136,41 +177,40 @@ def _structured_score(posting: Posting, profile: Profile) -> ScoreResult:
         )
         return ScoreResult(score=0, reasons=[reason])
 
+    # Score from the job's side: how much of what it asks for do you have? Every
+    # skill counts equally, so profile weights don't apply here.
     required = {s.lower() for s in posting.required_skills}
     nice = {s.lower() for s in posting.nice_skills}
+    mine = {skill.name: skill.name.lower() for skill in profile.skills}
+    mine.update({tool: tool.lower() for tool in profile.tools})
+
+    reasons = [f"{name} (required)" for name, low in mine.items() if low in required]
+    reasons += [
+        f"{name} (nice-to-have)"
+        for name, low in mine.items()
+        if low in nice and low not in required
+    ]
+    have = set(mine.values())
+    required_share = (
+        len(required & have) / max(len(required), MIN_LISTED_SKILLS)
+        if required
+        else None
+    )
+    nice_only = nice - required  # a skill listed as both counts as required
+    nice_share = (
+        len(nice_only & have) / max(len(nice_only), MIN_LISTED_SKILLS)
+        if nice_only
+        else None
+    )
+
+    if required_share is not None and nice_share is not None:
+        share = REQUIRED_SHARE * required_share + (1 - REQUIRED_SHARE) * nice_share
+    else:  # only one list: it counts for the whole score
+        share = required_share if required_share is not None else nice_share or 0.0
+
     degree_fields = {d.lower() for d in posting.degree_fields}
-
-    matched_weight = 0.0
-    max_weight = 0.0
-    reasons: list[str] = []
-
-    for skill in profile.skills:
-        max_weight += skill.weight
-        name_lower = skill.name.lower()
-        if name_lower in required:
-            matched_weight += skill.weight
-            reasons.append(f"{skill.name} (required)")
-        elif name_lower in nice:
-            matched_weight += skill.weight * NICE_SKILL_FACTOR
-            reasons.append(f"{skill.name} (nice-to-have)")
-
-    for tool in profile.tools:
-        max_weight += TOOL_WEIGHT
-        name_lower = tool.lower()
-        if name_lower in required:
-            matched_weight += TOOL_WEIGHT
-            reasons.append(f"{tool} (required)")
-        elif name_lower in nice:
-            matched_weight += TOOL_WEIGHT * NICE_SKILL_FACTOR
-            reasons.append(f"{tool} (nice-to-have)")
-
-    for major in profile.majors:
-        max_weight += MAJOR_WEIGHT
-        if major.lower() in degree_fields:
-            matched_weight += MAJOR_WEIGHT
-            reasons.append(major)
-
-    score = round(100 * matched_weight / max_weight) if max_weight else 0
+    reasons += [major for major in profile.majors if major.lower() in degree_fields]
     return ScoreResult(
-        score=score, reasons=reasons or ["no profile skills/tools/majors matched"]
+        score=round(100 * share),
+        reasons=reasons or ["no profile skills/tools/majors matched"],
     )

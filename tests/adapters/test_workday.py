@@ -94,3 +94,95 @@ def test_fetch_skips_detail_for_already_known_jobs(monkeypatch):
     assert first.description_html is None
     assert first.title == PAGE0["jobPostings"][0]["title"]
     assert first.url.endswith(PAGE0["jobPostings"][0]["externalPath"])
+
+
+def test_fetch_sends_region_filter_and_skips_details_for_unwanted_titles(monkeypatch):
+    monkeypatch.setattr(workday, "PAGE_SIZE", 2)
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path.endswith("/jobs"):
+            body = json.loads(request.content)
+            return httpx.Response(200, json=(PAGE0 if body["offset"] == 0 else PAGE1))
+        return httpx.Response(200, json=DETAIL)
+
+    facets = {"State__Region__Province": ["on-id"]}
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await workday.fetch(
+                client,
+                company="Workday",
+                tenant="workday",
+                host="wd5",
+                site="Workday",
+                applied_facets=facets,
+                title_ok=lambda title: "Developer" in title,
+            )
+
+    postings = asyncio.run(run())
+
+    lists = [r for r in requests if r.url.path.endswith("/jobs")]
+    details = [r for r in requests if not r.url.path.endswith("/jobs")]
+    assert all(json.loads(r.content)["appliedFacets"] == facets for r in lists)
+    assert len(details) == 1  # only "...Developer Platform..." of the 4 listed jobs
+    assert len(postings) == 1
+
+
+def _run_fetch(handler):
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await workday.fetch(
+                client, company="Brookfield", tenant="b", host="wd3", site="s"
+            )
+
+    return asyncio.run(run())
+
+
+def test_fetch_takes_the_id_from_the_path_when_bullet_fields_are_missing():
+    listing = {
+        "total": 1,
+        "jobPostings": [
+            {
+                "title": "Financial Analyst",
+                "externalPath": "/job/Toronto-Ontario/Financial-Analyst_R2053481",
+                "locationsText": "Toronto, Ontario",
+            }
+        ],
+    }
+
+    def handler(request):
+        if request.url.path.endswith("/jobs"):
+            return httpx.Response(200, json=listing)
+        return httpx.Response(200, json=DETAIL)
+
+    (posting,) = _run_fetch(handler)
+    assert posting.external_id == "R2053481"
+
+
+def test_a_broken_job_detail_keeps_the_job_from_the_list(monkeypatch):
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(job_http.asyncio, "sleep", no_sleep)
+    listing = {"total": 2, "jobPostings": PAGE0["jobPostings"]}
+    details = iter(
+        [
+            httpx.Response(
+                200, json={"jobPostingInfo": {"externalUrl": "x"}}
+            ),  # no title
+            httpx.Response(404),
+        ]
+    )
+
+    def handler(request):
+        if request.url.path.endswith("/jobs"):
+            return httpx.Response(200, json=listing)
+        return next(details)
+
+    postings = _run_fetch(handler)
+    assert [p.title for p in postings] == [j["title"] for j in PAGE0["jobPostings"]]
+    assert all(p.description_html is None for p in postings)

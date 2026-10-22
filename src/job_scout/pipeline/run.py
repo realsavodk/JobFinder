@@ -18,11 +18,12 @@ from job_scout.config import (
 from job_scout.llm.provider import get_provider
 from job_scout.models import CompanyRunStatus
 from job_scout.pipeline.dedup import dedup_postings
-from job_scout.pipeline.expire import expire_postings
+from job_scout.pipeline.expire import expire_postings, prune_irrelevant
 from job_scout.pipeline.extract import extract_postings
 from job_scout.pipeline.score import score_postings_for_company
 from job_scout.pipeline.upsert import existing_external_ids, upsert_postings
-from job_scout.scoring.profile import load_profile
+from job_scout.scoring.profile import Profile, load_profile
+from job_scout.scoring.score import is_relevant, title_matches
 
 ADAPTERS = {
     "greenhouse": greenhouse.fetch,
@@ -55,7 +56,10 @@ class RunResult:
 
 
 async def _fetch_company(
-    client: httpx.AsyncClient, session: Session, company: CompanyConfig
+    client: httpx.AsyncClient,
+    session: Session,
+    company: CompanyConfig,
+    profile: Profile,
 ) -> list[RawPosting] | None:
     if company.ats == "workday":
         known_ids = existing_external_ids(
@@ -68,7 +72,9 @@ async def _fetch_company(
             host=company.host,
             site=company.site,
             search_text=company.searchText,
+            applied_facets=company.appliedFacets,
             known_external_ids=known_ids,
+            title_ok=lambda title: title_matches(title, profile),
         )
     adapter = ADAPTERS.get(company.ats)
     if adapter is None:
@@ -81,6 +87,7 @@ async def _run_company(
     session: Session,
     company: CompanyConfig,
     run_started_at: datetime,
+    profile: Profile,
 ) -> RunResult:
     """Fetch + upsert + expire for one companies.yaml entry. Dedup/extract/score run
     later, once per distinct company *name* across all its sources — see run_all."""
@@ -88,7 +95,7 @@ async def _run_company(
         company=company.name
     )
     try:
-        postings = await _fetch_company(client, session, company)
+        postings = await _fetch_company(client, session, company, profile)
     except Exception as exc:  # noqa: BLE001 - one bad company must not kill the run
         status.last_run_at = datetime.now(UTC)
         status.ok = False
@@ -105,7 +112,10 @@ async def _run_company(
         session.commit()
         return RunResult(company=company.name, ok=False, message=status.message)
 
+    fetched = len(postings)
+    postings = [p for p in postings if is_relevant(p.title, p.location, profile)]
     upsert_postings(session, postings)
+    prune_irrelevant(session, source=company.ats, company=company.name, profile=profile)
     closed = expire_postings(
         session,
         source=company.ats,
@@ -115,7 +125,7 @@ async def _run_company(
 
     status.last_run_at = datetime.now(UTC)
     status.ok = True
-    status.message = f"{len(postings)} postings, {closed} closed"
+    status.message = f"{len(postings)} relevant of {fetched} postings, {closed} closed"
     status.postings_count = len(postings)
     status.closed_count = closed
     session.add(status)
@@ -147,7 +157,9 @@ async def run_all(companies_file: Path, profile_file: Path) -> list[RunResult]:
                 for i, company in enumerate(companies):
                     _report(f"Fetching jobs from {company.name}", i, len(companies))
                     results.append(
-                        await _run_company(client, session, company, run_started_at)
+                        await _run_company(
+                            client, session, company, run_started_at, profile
+                        )
                     )
                     if company.name not in touched_companies:
                         touched_companies.append(company.name)

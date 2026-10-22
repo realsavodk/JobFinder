@@ -33,8 +33,8 @@ Personalized job board. Pulls postings from company career pages (via public ATS
 
 ## Config
 - `.env`: `LLM_PROVIDER` (`ollama` default, or `openai_compatible`), `LLM_MODEL`, `LLM_NUM_CTX` (default `8192`), `OLLAMA_BASE_URL` (default `http://localhost:11434`), `LLM_API_KEY` + `LLM_BASE_URL` (only used by the `openai_compatible` provider), `DATABASE_URL`
-- `companies.yaml`: target companies. Greenhouse/Lever/Ashby: `{name, ats, token}`. Workday: `{name, ats: workday, tenant, host (e.g. wd3), site, searchText (optional, per company)}`
-- `profile.yaml`: user profile — majors, skills (with weight), tools, years of experience, seniority targets, locations, remote OK, exclude keywords
+- `companies.yaml`: target companies. Greenhouse/Lever/Ashby: `{name, ats, token}`. Workday: `{name, ats: workday, tenant, host (e.g. wd3), site, searchText (optional), appliedFacets (optional location filter, written by `discover --region`)}`
+- `profile.yaml`: user profile — majors, skills (with weight), tools, years of experience, seniority targets, locations, remote OK, exclude keywords, `remote_country` (remote jobs must mention it, e.g. Canada), `title_keywords` (only titles with one of these are fetched/stored; empty = all)
   - `job-scout import-resume <resume.pdf|.txt|.md>` (or the dashboard's "Upload resume" button, `POST /resume`) fills skills + `years_experience` from a resume via the LLM provider (`llm/resume.py`, `resume_import.py`). Years are computed in code from role dates (overlaps merged, internships excluded), not by the model. Existing skills/weights and other fields are kept; new skills get weight 1; the previous file is saved as `profile.yaml.bak`. PDFs need `pdftotext` (poppler).
 
 Ship `.env.example`, `companies.example.yaml`, `profile.example.yaml`. Never commit real keys.
@@ -61,14 +61,14 @@ Verify every endpoint against live responses before relying on field names; writ
 - On startup, check Ollama is reachable (`GET /api/tags`) and the configured model is in the list; if not, log a clear message and skip extraction for the run rather than crash — keyword-only scoring still runs.
 
 ## Pipeline
-1. **Fetch** all companies → `RawPosting`s
+1. **Fetch** all companies → `RawPosting`s, keeping only relevant ones (`is_relevant`: title matches `title_keywords`, location matches `locations` or remote in `remote_country`). Workday lists with the company's `appliedFacets` and skips the per-job detail request for non-matching titles. Untouched stored postings that stop being relevant are deleted (`prune_irrelevant`), not closed, so they don't flood Archive.
 2. **Upsert** keyed on `(source, company, external_id)`; track `first_seen`, `last_seen`
 3. **Expire** postings not seen in the latest successful run for that company → `status=closed`
 4. **Dedup** across sources: same company + normalized title + location → link as duplicates, show once
 5. **Extract** (LLM, only for new/changed postings, cache by content hash — see LLM extraction above): JSON with `seniority`, `min_years`, `required_skills[]`, `nice_skills[]`, `degree_fields[]`, `location`, `remote` (`onsite|hybrid|remote`), `role_family`. Validate with Pydantic; on failure, retry once, then mark `extraction_failed` and fall back to keyword-only scoring.
 6. **Score** 0–100 against `profile.yaml`:
    - Hard filters: location/remote, seniority, `min_years` ≤ profile + 1, exclude keywords
-   - Weighted overlap: required skills (high weight), nice skills (low), degree field match
+   - LLM-extracted postings: share of the job's skills you have — 80% required + 20% nice-to-have (one list alone counts 100%), every skill equal (profile weights ignored), lists shorter than 3 count as 3 so one match isn't a perfect score. Keyword-only postings still use profile-weighted overlap.
    - Phase 4: blend in embedding similarity (profile text vs. posting)
    - Store a short `score_reasons` list so the dashboard can explain each match
 7. **Notify** (phase 4): email digest of new postings above a threshold

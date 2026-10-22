@@ -177,7 +177,7 @@ def test_dashboard_filters_by_state_or_province(monkeypatch, tmp_path):
     assert "Ontario (1)" in everywhere and "California (1)" in everywhere
 
 
-def test_dashboard_hides_zero_scores_by_default_and_caps_rows(monkeypatch, tmp_path):
+def test_dashboard_shows_every_score_by_default_and_caps_rows(monkeypatch, tmp_path):
     from datetime import UTC, datetime
 
     from sqlmodel import Session
@@ -207,13 +207,12 @@ def test_dashboard_hides_zero_scores_by_default_and_caps_rows(monkeypatch, tmp_p
 
     with TestClient(app_module.app) as client:
         default = client.get("/").text
-        everything = client.get("/?min_score=0").text
+        scored = client.get("/?min_score=1").text
 
     assert "Job scoring 30" in default and "Job scoring 20" in default
     assert "Job scoring 10" not in default  # past the row cap
-    assert "Job scoring 0<" not in default
-    assert "Showing the top 2 of 3 matches" in default
-    assert "Showing the top 2 of 4 matches" in everything
+    assert "Showing the top 2 of 4 matches" in default
+    assert "Showing the top 2 of 3 matches" in scored
 
 
 def test_companies_page_lists_failures_first(monkeypatch, tmp_path):

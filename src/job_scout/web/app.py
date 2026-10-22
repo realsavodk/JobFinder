@@ -25,8 +25,8 @@ COMPANIES_FILE = Path("companies.yaml")
 PROFILE_FILE = Path("profile.yaml")
 RESUME_SUFFIXES = {".pdf", ".txt", ".md"}
 MAX_RESUME_BYTES = 5 * 1024 * 1024
-# Discovered companies bring tens of thousands of postings; rendering them all made
-# a 50 MB page. Score 0 means excluded or no skill match, so it's hidden by default.
+# Safety net: only relevant postings are stored now, but rendering tens of
+# thousands of rows once made a 50 MB page.
 MAX_ROWS = 500
 FOLLOW_UP_AFTER = timedelta(days=7)
 # Jobs page tabs: label and the posting statuses each one shows.
@@ -60,7 +60,7 @@ def _session() -> Session:
 @app.get("/", response_class=HTMLResponse)
 def index(
     request: Request,
-    min_score: int = 1,
+    min_score: int = 0,
     company: str = "",
     remote_only: bool = False,
     new_only: bool = False,

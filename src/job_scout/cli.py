@@ -58,6 +58,11 @@ def main() -> None:
     )
     discover_parser.add_argument("--cache-dir", type=Path, default=Path(".discovery"))
     discover_parser.add_argument(
+        "--cached-only",
+        action="store_true",
+        help="skip downloading index pages; just (re)check companies already found",
+    )
+    discover_parser.add_argument(
         "--region",
         type=str.upper,
         help="only list companies with open jobs in this state/province, e.g. ON",
@@ -75,7 +80,15 @@ def main() -> None:
     elif args.command == "eval-extraction":
         asyncio.run(run_eval_extraction(args.fixtures_dir, args.labels_file))
     elif args.command == "discover":
-        asyncio.run(run_discover(args.crawls, args.out, args.cache_dir, args.region))
+        asyncio.run(
+            run_discover(
+                args.crawls,
+                args.out,
+                args.cache_dir,
+                args.region,
+                cached_only=args.cached_only,
+            )
+        )
     elif args.command == "import-resume":
         try:
             lines = asyncio.run(import_resume(args.resume, args.profile_file))

@@ -15,5 +15,5 @@ companies.yaml.bak
 *.db
 
 # job-scout discover output and its cache
-discovered_companies.yaml
+discovered_companies*.yaml
 .discovery/

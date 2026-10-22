@@ -98,7 +98,12 @@ def test_check_workday_reads_total_from_one_job_query():
         return httpx.Response(200, json={"total": 1200, "jobPostings": [{}]})
 
     config = {"ats": "workday", "tenant": "acme", "host": "wd5", "site": "Careers"}
-    assert _check(config, handler) == {"jobs": 1200, "name": "acme", "regions": None}
+    assert _check(config, handler) == {
+        "jobs": 1200,
+        "name": "acme",
+        "regions": {},
+        "region_facets": {},
+    }
 
 
 def test_check_treats_404_as_dead_and_server_errors_as_unknown(monkeypatch):
@@ -232,3 +237,129 @@ def test_entries_checked_before_region_counts_are_rechecked():
     old_style = {"jobs": 5, "name": "x", "checked_at": recent.isoformat()}
     assert discover._stale(old_style, recent)
     assert not discover._stale({**old_style, "regions": {}}, recent)
+
+
+def test_workday_regions_come_from_location_facets():
+    facets = [
+        {  # not a location facet: "IT" mustn't be read as anything
+            "facetParameter": "jobFamilyGroup",
+            "descriptor": "Job Category",
+            "values": [{"descriptor": "Information Technology", "count": 9}],
+        },
+        {
+            "facetParameter": "State__Region__Province",
+            "descriptor": "State/ Region/ Province",
+            "values": [
+                {"descriptor": "Ontario", "count": 31, "id": "on-id"},
+                {"descriptor": "New York", "count": 5, "id": "ny-id"},
+            ],
+        },
+        {  # same jobs again by city: take the higher count, don't add
+            "facetParameter": "City",
+            "descriptor": "City",
+            "values": [
+                {"descriptor": "Toronto, ON", "count": 30, "id": "tor-id"},
+                {"descriptor": "Ottawa, ON", "count": 2, "id": "ott-id"},
+            ],
+        },
+        {  # grouped locations: only the leaves count
+            "facetParameter": "locationMainGroup",
+            "descriptor": "Locations",
+            "values": [
+                {
+                    "descriptor": "Location City",
+                    "facetParameter": "locationCity",
+                    "values": [
+                        {"descriptor": "Vancouver, BC", "count": 4, "id": "van-id"}
+                    ],
+                }
+            ],
+        },
+    ]
+
+    def handler(request):
+        return httpx.Response(200, json={"total": 50, "facets": facets})
+
+    config = {"ats": "workday", "tenant": "cibc", "host": "wd3", "site": "campus"}
+    result = _check(config, handler)
+    assert result["regions"] == {"ON": 32, "NY": 5, "BC": 4}
+    # Each region's filter comes from the parameter that gave its count; nested
+    # groups filter on their own parameter.
+    assert result["region_facets"] == {
+        "ON": {"City": ["tor-id", "ott-id"]},
+        "NY": {"State__Region__Province": ["ny-id"]},
+        "BC": {"locationCity": ["van-id"]},
+    }
+
+
+def test_workday_entries_checked_without_regions_are_rechecked():
+    now = discover.datetime.now(discover.UTC)
+    entry = {"jobs": 5, "name": "x", "regions": None, "checked_at": now.isoformat()}
+    assert discover._stale(entry, now)
+
+
+def test_find_candidates_cached_only_never_calls_the_index(tmp_path):
+    crawl = tmp_path / "CC-MAIN-2026-39" / "greenhouse-0"
+    crawl.mkdir(parents=True)
+    (crawl / "pages.json").write_text('{"pages": 2}')
+    (crawl / "p0.jsonl").write_text(
+        '{"url": "https://job-boards.greenhouse.io/stripe/jobs/1"}\n'
+    )  # p1 was never downloaded
+
+    def handler(request):
+        raise AssertionError(f"index was called: {request.url}")
+
+    async def run():
+        transport = httpx.MockTransport(handler)
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await discover.find_candidates(
+                client, tmp_path, ["CC-MAIN-2026-39"], lambda _m: None, cached_only=True
+            )
+
+    candidates, missing = asyncio.run(run())
+    assert candidates == {"greenhouse:stripe": {"ats": "greenhouse", "token": "stripe"}}
+    # p1 plus every other job board's query, none of which are cached here
+    assert missing == 1 + sum(len(q) for q in discover.QUERIES.values()) - 1
+
+
+def test_live_entries_add_the_workday_region_filter():
+    checked = {
+        "workday:cibc/wd3/campus": {
+            "config": {
+                "ats": "workday",
+                "tenant": "cibc",
+                "host": "wd3",
+                "site": "campus",
+            },
+            "jobs": 44,
+            "name": "cibc",
+            "regions": {"ON": 32},
+            "region_facets": {"ON": {"State__Region__Province": ["on-id"]}},
+        }
+    }
+    (entry,) = live_entries(checked, "ON")
+    assert entry["appliedFacets"] == {"State__Region__Province": ["on-id"]}
+
+
+def test_live_workday_entries_without_filters_are_rechecked():
+    now = discover.datetime.now(discover.UTC).isoformat()
+    base = {"name": "x", "regions": {"ON": 3}, "checked_at": now}
+    workday = {**base, "config": {"ats": "workday"}, "jobs": 5}
+    current = discover.datetime.fromisoformat(now)
+    assert discover._stale(workday, current)
+    assert not discover._stale({**workday, "region_facets": {}}, current)
+    assert not discover._stale({**base, "config": {"ats": "lever"}, "jobs": 5}, current)
+
+
+def test_live_entries_name_each_board_of_a_multi_board_workday_tenant():
+    def board(site, jobs):
+        return {
+            "config": {"ats": "workday", "tenant": "bmo", "host": "wd3", "site": site},
+            "jobs": jobs,
+            "name": "bmo",
+            "regions": {"ON": jobs},
+        }
+
+    checked = {"a": board("external", 9), "b": board("Campus", 3)}
+    names = [e["name"] for e in live_entries(checked, "ON")]
+    assert names == ["bmo (external)", "bmo (Campus)"]

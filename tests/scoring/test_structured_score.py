@@ -61,17 +61,61 @@ def test_failed_extraction_falls_back_to_keyword_scoring():
     assert result.score > 0
 
 
-def test_structured_required_skill_outweighs_nice_skill():
+def test_structured_score_is_share_of_the_jobs_skills_you_have():
     posting = _posting(
         remote="remote",
-        required_skills=["Python"],
-        nice_skills=["SQL"],
+        required_skills=["Python", "Go", "Java"],
+        nice_skills=["SQL", "Rust", "C"],
     )
     result = score_posting(posting, _profile())
-    # Python required (5) + SQL nice (3*0.5=1.5) = 6.5 / max(5+3+1+2)=11 -> 59%
-    assert result.score == 59
+    # 80% x (1 of 3 required) + 20% x (1 of 3 nice) = 33
+    assert result.score == 33
     assert "Python (required)" in result.reasons
     assert "SQL (nice-to-have)" in result.reasons
+
+
+def test_structured_required_skill_outweighs_nice_skill():
+    only_required = _posting(
+        remote="remote", required_skills=["Python", "Go"], nice_skills=["Rust"]
+    )
+    only_nice = _posting(
+        remote="remote",
+        required_skills=["Go", "Rust"],
+        nice_skills=["Python", "Java", "C"],
+    )
+    assert score_posting(only_required, _profile()).score == 27  # 80% x 1/3
+    assert score_posting(only_nice, _profile()).score == 7  # 20% x 1/3
+
+
+def test_structured_single_list_counts_for_the_whole_score():
+    no_nice = _posting(remote="remote", required_skills=["Python", "SQL", "Go"])
+    no_required = _posting(remote="remote", nice_skills=["SQL", "Python", "Go"])
+    assert score_posting(no_nice, _profile()).score == 67
+    assert score_posting(no_required, _profile()).score == 67
+
+
+def test_structured_score_ignores_profile_weights_and_counts_tools():
+    posting = _posting(remote="remote", required_skills=["Python", "SQL", "Docker"])
+    heavy = _profile(
+        skills=[SkillWeight(name="Python", weight=5), SkillWeight(name="SQL", weight=1)]
+    )
+    assert score_posting(posting, heavy).score == 100  # Docker comes from tools
+
+
+def test_structured_skill_listed_as_both_counts_once_as_required():
+    posting = _posting(
+        remote="remote",
+        required_skills=["Python", "Go", "Rust"],
+        nice_skills=["Python"],
+    )
+    result = score_posting(posting, _profile())
+    assert result.score == 33
+    assert result.reasons == ["Python (required)"]
+
+
+def test_structured_one_listed_skill_is_not_a_perfect_match():
+    posting = _posting(remote="remote", required_skills=["Python"])
+    assert score_posting(posting, _profile()).score == 33
 
 
 def test_structured_remote_field_satisfies_location_filter_even_with_mismatched_raw_location():
@@ -146,3 +190,21 @@ def test_structured_no_matches_scores_zero_with_explanatory_reason():
     result = score_posting(posting, _profile())
     assert result.score == 0
     assert result.reasons == ["no profile skills/tools/majors matched"]
+
+
+def test_structured_canada_remote_job_passes_when_remote_country_is_canada():
+    profile = _profile(locations=["Ontario"], remote_country="Canada")
+    canada = _posting(
+        remote="remote",
+        location="Remote - Canada",
+        extracted_location="Remote - Canada",
+        required_skills=["Python"],
+    )
+    us = _posting(
+        remote="remote",
+        location="Remote - US",
+        extracted_location="Remote - US",
+        required_skills=["Python"],
+    )
+    assert score_posting(canada, profile).score > 0
+    assert score_posting(us, profile).reasons == ["excluded: location/remote mismatch"]

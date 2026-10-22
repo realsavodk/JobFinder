@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime
 
 import httpx
@@ -18,28 +19,54 @@ async def fetch(
     host: str,
     site: str,
     search_text: str = "",
+    applied_facets: dict[str, list[str]] | None = None,
     known_external_ids: frozenset[str] = frozenset(),
+    title_ok: Callable[[str], bool] = lambda _title: True,
 ) -> list[RawPosting]:
     base = f"https://{tenant}.{host}.myworkdayjobs.com"
-    jobs = await _list_all_jobs(client, base, tenant, site, search_text)
+    jobs = await _list_all_jobs(
+        client, base, tenant, site, search_text, applied_facets or {}
+    )
 
     postings = []
-    for job in jobs:
-        external_id = job["bulletFields"][0]
+    # Each detail is its own request, so jobs with unwanted titles stop at the list.
+    for job in (j for j in jobs if title_ok(j.get("title") or "")):
+        external_id = _external_id(job)
+        from_list = _from_list(
+            job, company=company, external_id=external_id, base=base, site=site
+        )
         if external_id in known_external_ids:
-            postings.append(
-                _from_list(
-                    job, company=company, external_id=external_id, base=base, site=site
-                )
-            )
+            postings.append(from_list)
             continue
-        detail = await _fetch_detail(client, base, tenant, site, job["externalPath"])
-        postings.append(_from_detail(detail, company=company, external_id=external_id))
+        try:
+            detail = await _fetch_detail(
+                client, base, tenant, site, job["externalPath"]
+            )
+            postings.append(
+                _from_detail(detail, company=company, external_id=external_id)
+            )
+        except (httpx.HTTPError, KeyError, ValueError):
+            # One job's detail failing (often just closed) mustn't fail the company;
+            # keep it from the list, without a description.
+            postings.append(from_list)
     return postings
 
 
+def _external_id(job: dict) -> str:
+    # Most tenants put the requisition id in bulletFields; some omit it, but the
+    # path ends in it ("/job/Toronto/Financial-Analyst_R2053481").
+    if job.get("bulletFields"):
+        return job["bulletFields"][0]
+    return job["externalPath"].rsplit("_", 1)[-1]
+
+
 async def _list_all_jobs(
-    client: httpx.AsyncClient, base: str, tenant: str, site: str, search_text: str
+    client: httpx.AsyncClient,
+    base: str,
+    tenant: str,
+    site: str,
+    search_text: str,
+    applied_facets: dict[str, list[str]],
 ) -> list[dict]:
     jobs: list[dict] = []
     offset = 0
@@ -53,7 +80,7 @@ async def _list_all_jobs(
                 "limit": PAGE_SIZE,
                 "offset": offset,
                 "searchText": search_text,
-                "appliedFacets": {},
+                "appliedFacets": applied_facets,
             },
         )
         data = response.json()

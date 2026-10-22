@@ -18,6 +18,8 @@ class CompanyConfig(BaseModel):
     host: str | None = None
     site: str | None = None
     searchText: str = ""
+    # Workday list filter, e.g. {"State__Region__Province": ["<id>"]}; set by discover.
+    appliedFacets: dict[str, list[str]] = {}
 
 
 def load_companies(path: Path) -> list[CompanyConfig]:

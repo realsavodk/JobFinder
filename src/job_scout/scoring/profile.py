@@ -19,6 +19,10 @@ class Profile(BaseModel):
     seniority_targets: list[str] = []
     locations: list[str] = []
     remote_ok: bool = False
+    # With remote_ok, only remote jobs that mention this country count ("Canada").
+    remote_country: str | None = None
+    # Only keep postings whose title has one of these words; empty keeps everything.
+    title_keywords: list[str] = []
     exclude_keywords: list[str] = []
 
 
